@@ -296,7 +296,7 @@ export function getMasterEditionPda(mint: PublicKey): PublicKey {
 // ── Program Client ──────────────────────────────────────────────
 
 export function getProgram(provider: AnchorProvider): Program {
-  return new Program(IDL as any, provider);
+  return new (Program as any)(IDL, PROGRAM_ID, provider);
 }
 
 export function getProvider(

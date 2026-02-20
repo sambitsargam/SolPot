@@ -53,18 +53,22 @@ export function useGame() {
       const program = getProgram(provider);
 
       const [config, allRounds] = await Promise.all([
-        fetchGameConfig(program),
-        fetchAllRounds(program),
+        fetchGameConfig(program).catch(() => null),
+        fetchAllRounds(program).catch(() => []),
       ]);
 
       setGameConfig(config);
       setRounds(
         allRounds.sort((a, b) => b.account.createdAt - a.account.createdAt)
       );
-      setError(null);
+      if (!config) {
+        setError("Game not initialized yet");
+      } else {
+        setError(null);
+      }
     } catch (err: any) {
       console.error("Failed to fetch game state:", err);
-      setError(err.message || "Failed to load game data");
+      setError("Game not initialized yet");
     } finally {
       setLoading(false);
     }
