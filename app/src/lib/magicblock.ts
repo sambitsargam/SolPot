@@ -23,7 +23,7 @@ import {
   Context as SolanaContext,
 } from "@solana/web3.js";
 import { BorshCoder, EventParser } from "@coral-xyz/anchor";
-import { PROGRAM_ID, WS_URL } from "./constants";
+import { PROGRAM_ID, RPC_URL, WS_URL } from "./constants";
 import type { GameEvent } from "./types";
 
 export type RealTimeCallback = (event: GameEvent) => void;
@@ -39,7 +39,7 @@ export class SolPotRealTimeManager {
   private callbacks: Set<RealTimeCallback> = new Set();
 
   constructor(wsUrl?: string) {
-    this.connection = new Connection(wsUrl || WS_URL, {
+    this.connection = new Connection(RPC_URL, {
       commitment: "confirmed",
       wsEndpoint: wsUrl || WS_URL,
     });

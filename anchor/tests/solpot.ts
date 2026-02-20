@@ -51,7 +51,7 @@ describe("solpot", () => {
 
     console.log("Initialize game tx:", tx);
 
-    const gameConfig = await program.account.gameConfig.fetch(gameConfigPda);
+    const gameConfig = await (program.account as any).gameConfig.fetch(gameConfigPda);
     expect(gameConfig.authority.toBase58()).to.equal(
       authority.publicKey.toBase58()
     );
@@ -89,7 +89,7 @@ describe("solpot", () => {
 
     console.log("Create round tx:", tx);
 
-    const round = await program.account.round.fetch(roundPda);
+    const round = await (program.account as any).round.fetch(roundPda);
     expect(round.id.toNumber()).to.equal(0);
     expect(round.isActive).to.be.true;
     expect(round.hasWinner).to.be.false;
@@ -128,7 +128,7 @@ describe("solpot", () => {
 
     console.log("Enter round tx:", tx);
 
-    const round = await program.account.round.fetch(roundPda);
+    const round = await (program.account as any).round.fetch(roundPda);
     expect(round.playerCount).to.equal(1);
     expect(round.potLamports.toNumber()).to.equal(ENTRY_FEE.toNumber());
   });
@@ -176,7 +176,7 @@ describe("solpot", () => {
 
     console.log("Wrong guess tx:", tx);
 
-    const round = await program.account.round.fetch(roundPda);
+    const round = await (program.account as any).round.fetch(roundPda);
     expect(round.hasWinner).to.be.false;
     expect(round.isActive).to.be.true;
   });
@@ -224,7 +224,7 @@ describe("solpot", () => {
 
     console.log("Correct guess tx:", tx);
 
-    const round = await program.account.round.fetch(roundPda);
+    const round = await (program.account as any).round.fetch(roundPda);
     expect(round.hasWinner).to.be.true;
     expect(round.isActive).to.be.false;
     expect(round.winner.toBase58()).to.equal(player.publicKey.toBase58());
@@ -243,7 +243,7 @@ describe("solpot", () => {
 
     console.log("Distribute pot tx:", distributeTx);
 
-    const roundAfter = await program.account.round.fetch(roundPda);
+    const roundAfter = await (program.account as any).round.fetch(roundPda);
     expect(roundAfter.potDistributed).to.be.true;
     expect(roundAfter.potLamports.toNumber()).to.equal(0);
 
@@ -301,7 +301,7 @@ describe("solpot", () => {
 
     console.log("Mint NFT tx:", mintTx);
 
-    const roundFinal = await program.account.round.fetch(roundPda);
+    const roundFinal = await (program.account as any).round.fetch(roundPda);
     expect(roundFinal.nftMinted).to.be.true;
   });
 });
