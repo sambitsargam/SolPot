@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import type { RoundWithKey } from "@/hooks/useGame";
@@ -23,14 +23,35 @@ export default function RoundInfo({ round, distributePot, mintRewardNft, txPendi
     : account.potLamports;
   const potSOL = originalPotLamports / LAMPORTS_PER_SOL;
   const entryFeeSOL = account.entryFeeLamports / LAMPORTS_PER_SOL;
-  const now = Math.floor(Date.now() / 1000);
-  const timeLeft = Math.max(0, account.expiresAt - now);
+
+  // Live countdown timer
+  const [timeLeft, setTimeLeft] = useState(() =>
+    Math.max(0, account.expiresAt - Math.floor(Date.now() / 1000))
+  );
+
+  useEffect(() => {
+    setTimeLeft(Math.max(0, account.expiresAt - Math.floor(Date.now() / 1000)));
+  }, [account.expiresAt]);
+
+  useEffect(() => {
+    if (timeLeft <= 0 || !account.isActive) return;
+    const id = setInterval(() => {
+      setTimeLeft((prev) => {
+        const next = prev - 1;
+        return next <= 0 ? 0 : next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [timeLeft > 0, account.isActive]);
+
   const isExpired = timeLeft === 0;
 
   const formatTime = (seconds: number): string => {
-    const h = Math.floor(seconds / 3600);
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
     if (h > 0) return `${h}h ${m}m ${s}s`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
