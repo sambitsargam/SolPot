@@ -31,10 +31,13 @@ export const WSOL_MINT = new PublicKey(
   "So11111111111111111111111111111111111111112"
 );
 
-/** USDC mint (devnet) */
-export const USDC_MINT_DEVNET = new PublicKey(
-  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+/** USDC mint (mainnet — Jupiter only supports mainnet tokens) */
+export const USDC_MINT = new PublicKey(
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 );
+
+/** Whether we're running on devnet (Jupiter swaps only work on mainnet) */
+export const IS_DEVNET = RPC_URL.includes("devnet");
 
 /** Common token list for the token selector */
 export const TOKEN_LIST = [
@@ -49,7 +52,7 @@ export const TOKEN_LIST = [
   {
     symbol: "USDC",
     name: "USD Coin",
-    mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     decimals: 6,
     logoURI:
       "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",

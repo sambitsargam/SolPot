@@ -8,14 +8,28 @@ import {
   getProgram,
   getProvider,
   getGameConfigPda,
+  getLeaderboardPda,
   getRoundPda,
   getPlayerEntryPda,
+  getMetadataPda,
+  getMasterEditionPda,
   fetchGameConfig,
   fetchAllRounds,
   fetchRound,
   buildEnterRoundIx,
   buildSubmitGuessIx,
 } from "@/lib/program";
+import { TOKEN_METADATA_PROGRAM_ID } from "@/lib/constants";
+import {
+  Keypair,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
+} from "@solana/web3.js";
+import {
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
 import { buildSwapAndEnterTransaction } from "@/lib/jupiter";
 import { WSOL_MINT } from "@/lib/constants";
 import type { GameConfigAccount, RoundAccount } from "@/lib/types";
@@ -189,6 +203,112 @@ export function useGame() {
     [wallet, getAnchorProvider, refreshState]
   );
 
+  // Distribute pot to winner
+  const distributePot = useCallback(
+    async (roundPda: PublicKey, winnerPubkey: PublicKey): Promise<string> => {
+      const provider = getAnchorProvider();
+      if (!provider || !wallet.publicKey || !wallet.signTransaction) {
+        throw new Error("Wallet not connected");
+      }
+
+      setTxPending(true);
+      setError(null);
+
+      try {
+        const program = getProgram(provider);
+        const [gameConfigPda] = getGameConfigPda();
+        const [leaderboardPda] = getLeaderboardPda(gameConfigPda);
+        const config = await fetchGameConfig(program);
+        if (!config) throw new Error("Game not initialized");
+
+        const txSig = await program.methods
+          .distributePot()
+          .accountsStrict({
+            gameConfig: gameConfigPda,
+            round: roundPda,
+            winner: winnerPubkey,
+            feeReceiver: config.authority,
+            leaderboard: leaderboardPda,
+          })
+          .rpc({ commitment: "confirmed" });
+
+        await refreshState();
+        return txSig;
+      } catch (err: any) {
+        const msg = err.message || "Failed to distribute pot";
+        setError(msg);
+        throw new Error(msg);
+      } finally {
+        setTxPending(false);
+      }
+    },
+    [wallet, getAnchorProvider, refreshState]
+  );
+
+  // Mint winner NFT
+  const mintRewardNft = useCallback(
+    async (
+      roundPda: PublicKey,
+      winnerPubkey: PublicKey,
+      roundId: number
+    ): Promise<string> => {
+      const provider = getAnchorProvider();
+      if (!provider || !wallet.publicKey || !wallet.signTransaction) {
+        throw new Error("Wallet not connected");
+      }
+
+      setTxPending(true);
+      setError(null);
+
+      try {
+        const program = getProgram(provider);
+        const [gameConfigPda] = getGameConfigPda();
+
+        const nftMint = Keypair.generate();
+        const tokenAccount = getAssociatedTokenAddressSync(
+          nftMint.publicKey,
+          winnerPubkey
+        );
+        const metadataAccount = getMetadataPda(nftMint.publicKey);
+        const masterEdition = getMasterEditionPda(nftMint.publicKey);
+
+        const txSig = await program.methods
+          .mintRewardNft(
+            `SolPot Winner #${roundId}`,
+            "SOLPOT",
+            `https://solpot.app/api/nft/${roundId}`
+          )
+          .accountsStrict({
+            gameConfig: gameConfigPda,
+            round: roundPda,
+            nftMint: nftMint.publicKey,
+            tokenAccount,
+            winner: winnerPubkey,
+            metadataAccount,
+            masterEdition,
+            payer: wallet.publicKey,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            metadataProgram: TOKEN_METADATA_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: SYSVAR_RENT_PUBKEY,
+          })
+          .signers([nftMint])
+          .rpc({ commitment: "confirmed" });
+
+        await refreshState();
+        return txSig;
+      } catch (err: any) {
+        const msg = err.message || "Failed to mint NFT";
+        setError(msg);
+        throw new Error(msg);
+      } finally {
+        setTxPending(false);
+      }
+    },
+    [wallet, getAnchorProvider, refreshState]
+  );
+
   // Check if current user has entered a specific round
   const hasEnteredRound = useCallback(
     async (roundPda: PublicKey): Promise<boolean> => {
@@ -215,6 +335,8 @@ export function useGame() {
     txPending,
     enterRound,
     submitGuess,
+    distributePot,
+    mintRewardNft,
     hasEnteredRound,
     refreshState,
   };

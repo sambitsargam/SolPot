@@ -7,7 +7,7 @@ import GuessForm from "./GuessForm";
 import JupiterSwap from "./JupiterSwap";
 
 export default function GameBoard() {
-  const { gameConfig, rounds, loading, error, txPending, refreshState } =
+  const { gameConfig, rounds, loading, error, txPending, refreshState, distributePot, mintRewardNft } =
     useGame();
 
   if (loading) {
@@ -132,7 +132,13 @@ export default function GameBoard() {
             Completed Rounds
           </h3>
           {completedRounds.slice(0, 5).map((round) => (
-            <RoundInfo key={round.publicKey.toBase58()} round={round} />
+            <RoundInfo
+              key={round.publicKey.toBase58()}
+              round={round}
+              distributePot={distributePot}
+              mintRewardNft={mintRewardNft}
+              txPending={txPending}
+            />
           ))}
         </div>
       )}
