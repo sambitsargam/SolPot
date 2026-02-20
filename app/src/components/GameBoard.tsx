@@ -1,10 +1,26 @@
 "use client";
 
-import { useGame } from "@/hooks/useGame";
+import { useState, useCallback } from "react";
+import { useGame, type RoundWithKey } from "@/hooks/useGame";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import RoundInfo from "./RoundInfo";
 import GuessForm from "./GuessForm";
 import JupiterSwap from "./JupiterSwap";
+
+function ActiveRound({ round, refreshState }: { round: RoundWithKey; refreshState: () => Promise<void> }) {
+  const [joined, setJoined] = useState(false);
+  const onJoined = useCallback(() => setJoined(true), []);
+
+  return (
+    <div className="space-y-4">
+      <RoundInfo round={round} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <JupiterSwap round={round} joined={joined} onJoined={onJoined} />
+        <GuessForm round={round} joined={joined} onGuessSubmitted={refreshState} />
+      </div>
+    </div>
+  );
+}
 
 export default function GameBoard() {
   const { gameConfig, rounds, loading, error, txPending, refreshState, distributePot, mintRewardNft } =
@@ -99,13 +115,7 @@ export default function GameBoard() {
             Active Rounds
           </h3>
           {activeRounds.map((round) => (
-            <div key={round.publicKey.toBase58()} className="space-y-4">
-              <RoundInfo round={round} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <JupiterSwap round={round} />
-                <GuessForm round={round} />
-              </div>
-            </div>
+            <ActiveRound key={round.publicKey.toBase58()} round={round} refreshState={refreshState} />
           ))}
         </div>
       )}

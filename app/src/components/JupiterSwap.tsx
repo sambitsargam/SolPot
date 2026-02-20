@@ -8,16 +8,20 @@ import type { TokenInfo } from "@/lib/types";
 
 interface JupiterSwapProps {
   round: RoundWithKey;
+  joined?: boolean;
+  onJoined?: () => void;
 }
 
-export default function JupiterSwap({ round }: JupiterSwapProps) {
+export default function JupiterSwap({ round, joined: joinedProp, onJoined }: JupiterSwapProps) {
   const { enterRound, hasEnteredRound, txPending } = useGame();
   const [selectedToken, setSelectedToken] = useState<TokenInfo>(TOKEN_LIST[0]);
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [swapError, setSwapError] = useState<string | null>(null);
-  const [joined, setJoined] = useState(false);
+  const [joinedLocal, setJoinedLocal] = useState(false);
   const [checkingEntry, setCheckingEntry] = useState(true);
+
+  const joined = joinedProp ?? joinedLocal;
 
   // Check if user already entered this round
   useEffect(() => {
@@ -25,7 +29,8 @@ export default function JupiterSwap({ round }: JupiterSwapProps) {
     setCheckingEntry(true);
     hasEnteredRound(round.publicKey).then((entered) => {
       if (!cancelled) {
-        setJoined(entered);
+        setJoinedLocal(entered);
+        if (entered) onJoined?.();
         setCheckingEntry(false);
       }
     });
@@ -56,7 +61,8 @@ export default function JupiterSwap({ round }: JupiterSwapProps) {
 
       setStatus(`Success! Tx: ${txSig.slice(0, 8)}...`);
       setAmount("");
-      setJoined(true);
+      setJoinedLocal(true);
+      onJoined?.();
     } catch (err: any) {
       setSwapError(err.message || "Transaction failed");
       setStatus(null);

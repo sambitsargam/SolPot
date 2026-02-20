@@ -6,13 +6,17 @@ import { hashWord, prepareEncryptedGuess, generateKeyPair } from "@/lib/arcium";
 
 interface GuessFormProps {
   round: RoundWithKey;
+  joined?: boolean;
+  onGuessSubmitted?: () => Promise<void>;
 }
 
-export default function GuessForm({ round }: GuessFormProps) {
+export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted }: GuessFormProps) {
   const { submitGuess, hasEnteredRound, txPending } = useGame();
   const [guess, setGuess] = useState("");
-  const [joined, setJoined] = useState(false);
+  const [joinedLocal, setJoinedLocal] = useState(false);
   const [checkingEntry, setCheckingEntry] = useState(true);
+
+  const joined = joinedProp ?? joinedLocal;
   const [result, setResult] = useState<{
     type: "success" | "incorrect" | "error";
     message: string;
@@ -25,7 +29,7 @@ export default function GuessForm({ round }: GuessFormProps) {
     setCheckingEntry(true);
     hasEnteredRound(round.publicKey).then((entered) => {
       if (!cancelled) {
-        setJoined(entered);
+        setJoinedLocal(entered);
         setCheckingEntry(false);
       }
     });
@@ -56,8 +60,11 @@ export default function GuessForm({ round }: GuessFormProps) {
       // The encryption above provides transport-layer privacy (mempool protection)
       const txSig = await submitGuess(round.publicKey, guess.trim());
 
-      // Step 3: Check if guess was correct by re-fetching round state
-      // The on-chain program sets has_winner = true if correct
+      // Refresh game state so UI updates if we won
+      if (onGuessSubmitted) {
+        await onGuessSubmitted();
+      }
+
       setResult({
         type: "success",
         message: `Guess submitted! Tx: ${txSig.slice(0, 12)}...`,
