@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: 6 8 13;
+    --color-accent: 139 92 246;
+    --color-cyan: 6 182 212;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    color: #e2e8f0;
+    background: #06080d;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #06080d;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e2740;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a3555;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(139, 92, 246, 0.3);
+    color: #fff;
+  }
+}
+
+/* === Wallet Adapter Overrides === */
+.wallet-adapter-button-trigger {
+  background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%) !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  padding: 10px 20px !important;
+  transition: all 0.2s ease !important;
+  border: 1px solid rgba(139, 92, 246, 0.3) !important;
+}
+.wallet-adapter-button-trigger:hover {
+  opacity: 0.9 !important;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25) !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: #111624 !important;
+  border: 1px solid #1e2740 !important;
+  border-radius: 16px !important;
+}
+
+.wallet-adapter-modal-button-close {
+  background: #1e2740 !important;
+}
+
+.wallet-adapter-button {
+  font-family: "Inter", system-ui, sans-serif !important;
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-purple via-accent-cyan to-accent-teal;
+  }
+
+  .text-gradient-warm {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-amber via-accent-purple to-accent-cyan;
+  }
+
+  .card-glass {
+    @apply bg-bg-card/80 backdrop-blur-md border border-border rounded-2xl;
+  }
+
+  .card-interactive {
+    @apply bg-bg-card/80 backdrop-blur-md border border-border rounded-2xl transition-all duration-300 hover:border-border-light hover:shadow-lg hover:shadow-accent-purple/5;
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 60px -12px rgba(139, 92, 246, 0.3);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 60px -12px rgba(6, 182, 212, 0.3);
+  }
+
+  .noise {
+    position: relative;
+  }
+  .noise::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4), rgba(16, 185, 129, 0.2));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full;
+  }
+
+  .badge-purple {
+    @apply badge bg-accent-purple/10 text-accent-violet border border-accent-purple/20;
+  }
+
+  .badge-cyan {
+    @apply badge bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20;
+  }
+
+  .badge-green {
+    @apply badge bg-accent-green/10 text-accent-green border border-accent-green/20;
+  }
+
+  /* Animated gradient line */
+  .divider-glow {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.5), rgba(6, 182, 212, 0.5), transparent);
+  }
+}
