@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useGame, type RoundWithKey } from "@/hooks/useGame";
 import { TOKEN_LIST, WSOL_MINT } from "@/lib/constants";
@@ -11,11 +11,26 @@ interface JupiterSwapProps {
 }
 
 export default function JupiterSwap({ round }: JupiterSwapProps) {
-  const { enterRound, txPending } = useGame();
+  const { enterRound, hasEnteredRound, txPending } = useGame();
   const [selectedToken, setSelectedToken] = useState<TokenInfo>(TOKEN_LIST[0]);
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [swapError, setSwapError] = useState<string | null>(null);
+  const [joined, setJoined] = useState(false);
+  const [checkingEntry, setCheckingEntry] = useState(true);
+
+  // Check if user already entered this round
+  useEffect(() => {
+    let cancelled = false;
+    setCheckingEntry(true);
+    hasEnteredRound(round.publicKey).then((entered) => {
+      if (!cancelled) {
+        setJoined(entered);
+        setCheckingEntry(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [round.publicKey, hasEnteredRound]);
 
   const handleEnter = async () => {
     setSwapError(null);
@@ -41,6 +56,7 @@ export default function JupiterSwap({ round }: JupiterSwapProps) {
 
       setStatus(`Success! Tx: ${txSig.slice(0, 8)}...`);
       setAmount("");
+      setJoined(true);
     } catch (err: any) {
       setSwapError(err.message || "Transaction failed");
       setStatus(null);
@@ -49,10 +65,38 @@ export default function JupiterSwap({ round }: JupiterSwapProps) {
 
   const entryFeeSOL = round.account.entryFeeLamports / LAMPORTS_PER_SOL;
 
+  // Already joined — show confirmation state
+  if (joined) {
+    return (
+      <div className="card-glass p-5">
+        <h4 className="text-sm font-medium text-accent-cyan mb-3">
+          Enter Round
+        </h4>
+        <div className="mb-3 bg-accent-green/5 rounded-xl p-4 border border-accent-green/20 text-center">
+          <div className="flex items-center justify-center gap-2 mb-1.5">
+            <svg className="w-5 h-5 text-accent-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm font-semibold text-accent-green">Joined the Round</p>
+          </div>
+          <p className="text-[11px] text-text-dim">
+            You paid {entryFeeSOL.toFixed(3)} SOL entry fee. Submit your guess below!
+          </p>
+        </div>
+        <button
+          disabled
+          className="w-full py-3 rounded-xl font-medium text-sm bg-bg-elevated border border-border text-text-dim cursor-not-allowed opacity-60"
+        >
+          Already Entered
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="card-glass p-5">
       <h4 className="text-sm font-medium text-accent-cyan mb-3">
-        Enter Round (Jupiter Swap)
+        Enter Round
       </h4>
 
       {/* Token Selector */}
@@ -109,10 +153,11 @@ export default function JupiterSwap({ round }: JupiterSwapProps) {
       {/* SOL direct entry info */}
       {selectedToken.mint === WSOL_MINT.toBase58() && (
         <div className="mb-3 bg-bg-elevated rounded-xl p-3 border border-border">
-          <p className="text-[11px] uppercase tracking-wider text-text-dim">Entry fee</p>
+          <p className="text-[11px] uppercase tracking-wider text-text-dim">Fixed entry fee</p>
           <p className="text-lg font-bold text-accent-green font-mono">
             {entryFeeSOL.toFixed(3)} SOL
           </p>
+          <p className="text-[11px] text-text-dim mt-0.5">All entry fees go into the pot</p>
         </div>
       )}
 
@@ -121,14 +166,17 @@ export default function JupiterSwap({ round }: JupiterSwapProps) {
         onClick={handleEnter}
         disabled={
           txPending ||
+          checkingEntry ||
           !round.account.isActive ||
           (selectedToken.mint !== WSOL_MINT.toBase58() && !amount)
         }
         className="w-full py-3 rounded-xl font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-accent-purple to-accent-cyan hover:opacity-90"
       >
-        {txPending
+        {checkingEntry
+          ? "Checking..."
+          : txPending
           ? "Processing..."
-          : `Enter Round #${round.account.id}`}
+          : `Enter Round #${round.account.id} — ${entryFeeSOL.toFixed(3)} SOL`}
       </button>
 
       {/* Status / Error */}

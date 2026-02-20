@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGame, type RoundWithKey } from "@/hooks/useGame";
 import { hashWord, prepareEncryptedGuess, generateKeyPair } from "@/lib/arcium";
 
@@ -9,13 +9,28 @@ interface GuessFormProps {
 }
 
 export default function GuessForm({ round }: GuessFormProps) {
-  const { submitGuess, txPending } = useGame();
+  const { submitGuess, hasEnteredRound, txPending } = useGame();
   const [guess, setGuess] = useState("");
+  const [joined, setJoined] = useState(false);
+  const [checkingEntry, setCheckingEntry] = useState(true);
   const [result, setResult] = useState<{
     type: "success" | "incorrect" | "error";
     message: string;
   } | null>(null);
   const [encryptionInfo, setEncryptionInfo] = useState<string | null>(null);
+
+  // Check if user has entered this round
+  useEffect(() => {
+    let cancelled = false;
+    setCheckingEntry(true);
+    hasEnteredRound(round.publicKey).then((entered) => {
+      if (!cancelled) {
+        setJoined(entered);
+        setCheckingEntry(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [round.publicKey, hasEnteredRound]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +95,24 @@ export default function GuessForm({ round }: GuessFormProps) {
             ? `Winner: ${round.account.winner.toBase58().slice(0, 8)}...`
             : "Round is not active"}
         </p>
+      </div>
+    );
+  }
+
+  // Not yet entered this round
+  if (!joined && !checkingEntry) {
+    return (
+      <div className="card-glass p-5">
+        <h4 className="text-sm font-medium text-accent-violet mb-3">
+          Submit Encrypted Guess
+        </h4>
+        <div className="bg-bg-elevated rounded-xl p-4 border border-border text-center">
+          <svg className="w-6 h-6 mx-auto mb-2 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+          <p className="text-sm text-text-secondary mb-1">Enter the round first</p>
+          <p className="text-[11px] text-text-dim">Pay the entry fee to unlock guessing</p>
+        </div>
       </div>
     );
   }

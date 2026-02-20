@@ -83,7 +83,7 @@ export default function RoundInfo({ round }: RoundInfoProps) {
         <div className="bg-bg-elevated rounded-xl p-3 border border-border">
           <p className="text-[11px] uppercase tracking-wider text-text-dim">Entry Fee</p>
           <p className="text-xl font-bold text-text-primary font-mono">{entryFeeSOL.toFixed(3)}</p>
-          <p className="text-[11px] text-text-dim">SOL</p>
+          <p className="text-[11px] text-text-dim">SOL (fixed)</p>
         </div>
 
         {/* Status */}
