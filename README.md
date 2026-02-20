@@ -2,39 +2,18 @@
 
 A real-time, encrypted, on-chain word guessing game on Solana with Jupiter swap entry, Arcium-style encrypted guess validation, Metaplex NFT rewards, and Magicblock-pattern real-time leaderboard updates.
 
-## Architecture
+## Features
 
-```
-SolPot Arena
-├── anchor/                 # Solana program (Anchor framework)
-│   ├── programs/solpot/    # On-chain game logic
-│   │   └── src/
-│   │       ├── lib.rs                  # Program entrypoint
-│   │       ├── state.rs                # Account structs & events
-│   │       ├── errors.rs               # Custom error codes
-│   │       └── instructions/
-│   │           ├── initialize_game.rs  # Create game config + leaderboard
-│   │           ├── create_round.rs     # New round with word hash
-│   │           ├── enter_round.rs      # Pay entry fee, join round
-│   │           ├── submit_guess.rs     # SHA-256 guess verification
-│   │           ├── distribute_pot.rs   # Payout winner + fee
-│   │           ├── mint_reward_nft.rs  # Metaplex NFT CPI
-│   │           └── close_round.rs      # Close expired/completed round
-│   └── tests/solpot.ts     # Integration tests
-├── app/                    # Next.js frontend
-│   └── src/
-│       ├── app/            # Next.js app router pages
-│       ├── components/     # React UI components
-│       ├── hooks/          # Game state & leaderboard hooks
-│       └── lib/
-│           ├── program.ts      # Anchor client + PDA derivation
-│           ├── jupiter.ts      # Jupiter Metis swap API
-│           ├── arcium.ts       # X25519 + XChaCha20 encryption
-│           ├── magicblock.ts   # WebSocket real-time manager
-│           ├── constants.ts    # Program ID, RPC, tokens
-│           └── types.ts        # TypeScript type definitions
-└── README.md
-```
+- **On-Chain Word Guessing** — Secret words stored as SHA-256 hashes on-chain; guesses are verified trustlessly by the Solana program
+- **Pay-to-Play with Any Token** — Enter rounds with SOL directly, or swap any SPL token (USDC, BONK, etc.) via Jupiter in a single transaction
+- **Winner-Takes-All Pot** — All entry fees pool into a PDA vault; the first correct guesser claims the entire pot (minus a small platform fee)
+- **Encrypted Guesses** — Client-side X25519 key exchange + XChaCha20-Poly1305 AEAD encryption protects guesses from mempool snooping
+- **NFT Winner Trophies** — Winners receive a unique Metaplex NFT minted on-chain via CPI as proof of victory
+- **Real-Time Leaderboard** — Live updates via Solana WebSocket subscriptions using the Magicblock pattern — no polling required
+- **Claim & Mint UI** — Winners can claim their prize and mint their NFT directly from the frontend with one-click buttons
+- **Multi-Wallet Support** — Works with Phantom, Solflare, Backpack, and other Solana wallets via Wallet Adapter
+- **Fully Permissionless** — Pot distribution and NFT minting are permissionless instructions — anyone can trigger them once a winner is determined
+- **Devnet Ready** — Deployed and playable on Solana devnet with automated round creation scripts
 
 ## Game Flow
 

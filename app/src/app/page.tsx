@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const WalletMultiButtonDynamic = dynamic(
   async () =>
@@ -17,6 +17,9 @@ const Leaderboard = dynamic(() => import("@/components/Leaderboard"), {
   ssr: false,
 });
 const NFTDisplay = dynamic(() => import("@/components/NFTDisplay"), {
+  ssr: false,
+});
+const SwapPanel = dynamic(() => import("@/components/SwapPanel"), {
   ssr: false,
 });
 
@@ -221,10 +224,29 @@ const steps = [
 export default function Home() {
   const { connected } = useWallet();
   const [activeFeature, setActiveFeature] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const [showSwap, setShowSwap] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  // Prevent hydration mismatch — wallet state not known during SSR
+  if (!mounted) {
+    return (
+      <main className="min-h-screen bg-bg-primary flex items-center justify-center">
+        <div className="inline-flex items-center gap-3">
+          <div className="w-5 h-5 rounded-full border-2 border-accent-purple border-t-transparent animate-spin" />
+          <span className="text-text-secondary text-sm">Loading...</span>
+        </div>
+      </main>
+    );
+  }
 
   if (connected) {
     return (
       <main className="min-h-screen bg-bg-primary">
+        {/* Swap Modal */}
+        {showSwap && <SwapPanel onClose={() => setShowSwap(false)} />}
+
         {/* Connected Header */}
         <header className="sticky top-0 z-50 border-b border-border bg-bg-primary/80 backdrop-blur-xl">
           <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
@@ -240,6 +262,16 @@ export default function Home() {
               </span>
             </div>
             <div className="flex items-center gap-3">
+              {/* Swap Button */}
+              <button
+                onClick={() => setShowSwap(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-accent-cyan/10 border border-accent-cyan/20 text-accent-cyan hover:bg-accent-cyan/20 hover:border-accent-cyan/30 transition-all"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                </svg>
+                Swap
+              </button>
               <span className="badge-green">
                 <span className="w-1.5 h-1.5 rounded-full bg-accent-green animate-pulse" />
                 Devnet
