@@ -93,8 +93,9 @@ export default function GameBoard() {
     );
   }
 
-  const activeRounds = rounds.filter((r) => r.account.isActive);
-  const completedRounds = rounds.filter((r) => !r.account.isActive);
+  const now = Math.floor(Date.now() / 1000);
+  const activeRounds = rounds.filter((r) => r.account.isActive && r.account.expiresAt > now);
+  const completedRounds = rounds.filter((r) => !r.account.isActive || r.account.expiresAt <= now);
   const totalPot = activeRounds.reduce((sum, r) => sum + r.account.potLamports, 0);
   const totalPlayers = activeRounds.reduce((sum, r) => sum + r.account.playerCount, 0);
   const totalWinners = completedRounds.filter((r) => {
