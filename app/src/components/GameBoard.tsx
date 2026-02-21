@@ -6,6 +6,9 @@ import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import RoundInfo from "./RoundInfo";
 import GuessForm from "./GuessForm";
 import JupiterSwap from "./JupiterSwap";
+import LuckyNumberGame from "./LuckyNumberGame";
+import TriviaGame from "./TriviaGame";
+import { GAME_TYPES, getRoundGameType, type GameType } from "@/lib/gameTypes";
 
 /* ─── Tabs ──────────────────────────────────────────────────────── */
 
@@ -34,16 +37,55 @@ const TABS: { key: Tab; label: string; icon: JSX.Element }[] = [
 
 /* ─── Active Round Wrapper ──────────────────────────────────────── */
 
-function ActiveRound({ round, refreshState }: { round: RoundWithKey; refreshState: () => Promise<void> }) {
+function ActiveRound({
+  round,
+  refreshState,
+  gameType,
+}: {
+  round: RoundWithKey;
+  refreshState: () => Promise<void>;
+  gameType: GameType;
+}) {
   const [joined, setJoined] = useState(false);
   const onJoined = useCallback(() => setJoined(true), []);
 
+  // Render the appropriate guess component based on game type
+  const renderGuessComponent = () => {
+    switch (gameType) {
+      case "lucky-number":
+        return (
+          <LuckyNumberGame
+            round={round}
+            joined={joined}
+            onGuessSubmitted={refreshState}
+          />
+        );
+      case "trivia":
+        return (
+          <TriviaGame
+            round={round}
+            joined={joined}
+            onGuessSubmitted={refreshState}
+          />
+        );
+      case "word-guess":
+      default:
+        return (
+          <GuessForm
+            round={round}
+            joined={joined}
+            onGuessSubmitted={refreshState}
+          />
+        );
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <RoundInfo round={round} />
+      <RoundInfo round={round} gameType={gameType} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <JupiterSwap round={round} joined={joined} onJoined={onJoined} />
-        <GuessForm round={round} joined={joined} onGuessSubmitted={refreshState} />
+        {renderGuessComponent()}
       </div>
     </div>
   );
@@ -51,10 +93,16 @@ function ActiveRound({ round, refreshState }: { round: RoundWithKey; refreshStat
 
 /* ─── Main GameBoard ────────────────────────────────────────────── */
 
-export default function GameBoard() {
+interface GameBoardProps {
+  gameType?: GameType;
+  onBack?: () => void;
+}
+
+export default function GameBoard({ gameType = "word-guess", onBack }: GameBoardProps) {
   const { gameConfig, rounds, loading, error, txPending, refreshState, distributePot, mintRewardNft } =
     useGame();
   const [activeTab, setActiveTab] = useState<Tab>("arena");
+  const gameTypeConfig = GAME_TYPES[gameType];
 
   if (loading) {
     return (
@@ -94,8 +142,11 @@ export default function GameBoard() {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const activeRounds = rounds.filter((r) => r.account.isActive && r.account.expiresAt > now);
-  const completedRounds = rounds.filter((r) => !r.account.isActive || r.account.expiresAt <= now);
+  // Filter rounds by game type using the metadata map
+  const allActiveRounds = rounds.filter((r) => r.account.isActive && r.account.expiresAt > now);
+  const allCompletedRounds = rounds.filter((r) => !r.account.isActive || r.account.expiresAt <= now);
+  const activeRounds = allActiveRounds.filter((r) => getRoundGameType(r.account.id) === gameType);
+  const completedRounds = allCompletedRounds.filter((r) => getRoundGameType(r.account.id) === gameType);
   const totalPot = activeRounds.reduce((sum, r) => sum + r.account.potLamports, 0);
   const totalPlayers = activeRounds.reduce((sum, r) => sum + r.account.playerCount, 0);
   const totalWinners = completedRounds.filter((r) => {
@@ -110,10 +161,26 @@ export default function GameBoard() {
       {gameConfig && (
         <div className="card-glass p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />
-              Game Dashboard
-            </h2>
+            <div className="flex items-center gap-3">
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="w-8 h-8 rounded-lg bg-bg-elevated border border-border hover:border-border-light flex items-center justify-center text-text-dim hover:text-text-primary transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                  </svg>
+                </button>
+              )}
+              <span className="text-2xl">{gameTypeConfig.emoji}</span>
+              <div>
+                <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
+                  {gameTypeConfig.name}
+                  <span className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />
+                </h2>
+                <p className="text-[11px] text-text-dim">{gameTypeConfig.tagline}</p>
+              </div>
+            </div>
             <button
               onClick={refreshState}
               disabled={txPending}
@@ -208,6 +275,7 @@ export default function GameBoard() {
                 key={round.publicKey.toBase58()}
                 round={round}
                 refreshState={refreshState}
+                gameType={gameType}
               />
             ))
           ) : (
@@ -217,9 +285,9 @@ export default function GameBoard() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-text-secondary mb-1 font-medium">No active rounds</p>
+              <p className="text-text-secondary mb-1 font-medium">No active {gameTypeConfig.name} rounds</p>
               <p className="text-text-dim text-sm">
-                Waiting for admin to create a new round...
+                Waiting for admin to create a new {gameTypeConfig.name.toLowerCase()} round...
               </p>
             </div>
           )}

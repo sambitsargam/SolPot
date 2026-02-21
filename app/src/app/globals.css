@@ -13,12 +13,35 @@
     scroll-behavior: smooth;
   }
 
+  /* Dark mode (default) */
+  html.dark body,
   body {
     color: #e2e8f0;
     background: #06080d;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Light mode overrides */
+  html.light body {
+    color: #1e293b;
+    background: #f8fafc;
+  }
+
+  html.light ::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+  html.light ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+  }
+  html.light ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  html.light ::selection {
+    background: rgba(139, 92, 246, 0.2);
+    color: #1e293b;
   }
 
   /* Custom scrollbar */
@@ -146,5 +169,47 @@
   .divider-glow {
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.5), rgba(6, 182, 212, 0.5), transparent);
+  }
+
+  /* ─── Light mode overrides for semantic classes ─── */
+  html.light .bg-bg-primary { background-color: #f8fafc !important; }
+  html.light .bg-bg-secondary { background-color: #f1f5f9 !important; }
+  html.light .bg-bg-card { background-color: #ffffff !important; }
+  html.light .bg-bg-card\/80 { background-color: rgba(255,255,255,0.8) !important; }
+  html.light .bg-bg-elevated { background-color: #f1f5f9 !important; }
+  html.light .bg-bg-primary\/80 { background-color: rgba(248,250,252,0.8) !important; }
+  html.light .bg-bg-primary\/60 { background-color: rgba(248,250,252,0.6) !important; }
+  html.light .bg-bg-elevated\/50 { background-color: rgba(241,245,249,0.5) !important; }
+
+  html.light .text-text-primary { color: #1e293b !important; }
+  html.light .text-text-secondary { color: #475569 !important; }
+  html.light .text-text-muted { color: #64748b !important; }
+  html.light .text-text-dim { color: #94a3b8 !important; }
+
+  html.light .border-border { border-color: #e2e8f0 !important; }
+  html.light .border-border\/50 { border-color: rgba(226,232,240,0.5) !important; }
+  html.light .border-border-light { border-color: #cbd5e1 !important; }
+
+  html.light .card-glass {
+    background-color: rgba(255,255,255,0.8) !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  html.light .card-interactive {
+    background-color: rgba(255,255,255,0.8) !important;
+    border-color: #e2e8f0 !important;
+  }
+  html.light .card-interactive:hover {
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 4px 12px rgba(139,92,246,0.08);
+  }
+
+  /* Fix wallet adapter in light mode */
+  html.light .wallet-adapter-modal-wrapper {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+  }
+  html.light .wallet-adapter-modal-button-close {
+    background: #f1f5f9 !important;
   }
 }

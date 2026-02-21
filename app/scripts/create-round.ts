@@ -1,6 +1,11 @@
 /**
  * Create a new round on devnet.
- * Run: npx tsx scripts/create-round.ts
+ *
+ * Usage:
+ *   npx tsx scripts/create-round.ts                          # Word Guess (default, empty answer)
+ *   npx tsx scripts/create-round.ts word "ocean"             # Word Guess with secret "ocean"
+ *   npx tsx scripts/create-round.ts number                 # Lucky Number (1-100)
+ *   npx tsx scripts/create-round.ts trivia "Solana (SOL)" "What is the native token of Solana?" "Ethereum,Solana (SOL),Bitcoin,Cardano" "Crypto"
  */
 import {
   Connection,
@@ -36,6 +41,8 @@ function encodeCreateRoundArgs(
   return buf;
 }
 
+type GameType = "word-guess" | "lucky-number" | "trivia";
+
 async function main() {
   const keypairPath = path.resolve(
     process.env.HOME || "~",
@@ -67,8 +74,38 @@ async function main() {
   const roundCount = Number(data.readBigUInt64LE(8 + 32)); // Skip 8-byte discriminator + 32-byte authority
   console.log("Current round count:", roundCount);
 
-  const secretWord = "";
-  const wordHash = createHash("sha256").update(secretWord).digest();
+  // Parse game type from CLI args
+  const args = process.argv.slice(2);
+  let gameType: GameType = "word-guess";
+  let secretAnswer = "";
+  let triviaQuestion = "";
+  let triviaOptions: string[] = [];
+  let triviaCategory = "General";
+
+  if (args[0] === "word" || args[0] === "w") {
+    gameType = "word-guess";
+    secretAnswer = args[1] || "";
+  } else if (args[0] === "number" || args[0] === "n") {
+    gameType = "lucky-number";
+    const num = parseInt(args[1] || "0", 10);
+    if (num < 1 || num > 100) {
+      console.log("Lucky number must be 1-100. Using random number.");
+      secretAnswer = String(Math.floor(Math.random() * 100) + 1);
+    } else {
+      secretAnswer = String(num);
+    }
+  } else if (args[0] === "trivia" || args[0] === "t") {
+    gameType = "trivia";
+    secretAnswer = args[1] || "";
+    triviaQuestion = args[2] || "What is the answer?";
+    triviaOptions = args[3] ? args[3].split(",") : [secretAnswer, "Wrong 1", "Wrong 2", "Wrong 3"];
+    triviaCategory = args[4] || "General";
+  } else if (args[0]) {
+    // If just a word is provided, treat as word-guess answer
+    secretAnswer = args[0];
+  }
+
+  const wordHash = createHash("sha256").update(secretAnswer).digest();
 
   const roundIdBuf = Buffer.alloc(8);
   roundIdBuf.writeBigUInt64LE(BigInt(roundCount));
@@ -77,8 +114,8 @@ async function main() {
     PROGRAM_ID
   );
 
-  console.log(`\nCreating Round #${roundCount}`);
-  console.log("Secret word:", secretWord);
+  console.log(`\nCreating Round #${roundCount} (${gameType})`);
+  console.log("Secret answer:", secretAnswer || "(empty)");
   console.log("Round PDA:", roundPda.toBase58());
 
   const ix = new TransactionInstruction({
@@ -102,6 +139,20 @@ async function main() {
   });
 
   console.log("✓ Round #" + roundCount + " created! Tx:", sig);
+
+  // Output metadata to add to gameTypes.ts
+  console.log("\n─── Add to src/lib/gameTypes.ts ───");
+  console.log(`\nIn ROUND_GAME_TYPES, add:\n  ${roundCount}: "${gameType}",`);
+
+  if (gameType === "trivia") {
+    console.log(`\nIn TRIVIA_QUESTIONS, add:`);
+    console.log(`  ${roundCount}: {`);
+    console.log(`    question: "${triviaQuestion}",`);
+    console.log(`    options: ${JSON.stringify(triviaOptions)},`);
+    console.log(`    category: "${triviaCategory}",`);
+    console.log(`  },`);
+  }
+
   console.log("\nRefresh the frontend to see the new round.");
 }
 

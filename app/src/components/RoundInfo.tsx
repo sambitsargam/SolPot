@@ -4,19 +4,22 @@ import { useState, useEffect } from "react";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import type { RoundWithKey } from "@/hooks/useGame";
+import { GAME_TYPES, type GameType } from "@/lib/gameTypes";
 
 interface RoundInfoProps {
   round: RoundWithKey;
   distributePot?: (roundPda: PublicKey, winner: PublicKey) => Promise<string>;
   mintRewardNft?: (roundPda: PublicKey, winner: PublicKey, roundId: number) => Promise<string>;
   txPending?: boolean;
+  gameType?: GameType;
 }
 
-export default function RoundInfo({ round, distributePot, mintRewardNft, txPending = false }: RoundInfoProps) {
+export default function RoundInfo({ round, distributePot, mintRewardNft, txPending = false, gameType }: RoundInfoProps) {
   const { account } = round;
   const wallet = useWallet();
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const gameConfig = gameType ? GAME_TYPES[gameType] : null;
   // Show original pot size even after distribution
   const originalPotLamports = account.potDistributed
     ? account.playerCount * account.entryFeeLamports
@@ -74,6 +77,7 @@ export default function RoundInfo({ round, distributePot, mintRewardNft, txPendi
     <div className="card-glass p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
+          {gameConfig && <span className="text-lg">{gameConfig.emoji}</span>}
           <h3 className="text-base font-semibold text-text-primary">Round #{account.id}</h3>
           <span
             className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${

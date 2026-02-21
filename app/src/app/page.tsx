@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useState, useEffect } from "react";
+import { useGame } from "@/hooks/useGame";
+import type { GameType } from "@/lib/gameTypes";
 
 const WalletMultiButtonDynamic = dynamic(
   async () =>
@@ -20,6 +22,12 @@ const NFTDisplay = dynamic(() => import("@/components/NFTDisplay"), {
   ssr: false,
 });
 const SwapPanel = dynamic(() => import("@/components/SwapPanel"), {
+  ssr: false,
+});
+const PortalHub = dynamic(() => import("@/components/PortalHub"), {
+  ssr: false,
+});
+const PlayerStats = dynamic(() => import("@/components/PlayerStats"), {
   ssr: false,
 });
 
@@ -204,13 +212,13 @@ const steps = [
   },
   {
     num: "02",
-    title: "Enter a Round",
-    desc: "Pay the entry fee in SOL or swap any token via Jupiter to join an active round.",
+    title: "Choose a Game",
+    desc: "Pick from Word Guess, Lucky Number, or Trivia Challenge in the multi-game portal.",
   },
   {
     num: "03",
-    title: "Submit Your Guess",
-    desc: "Type your word. It gets encrypted with Arcium and stored on-chain as a commitment.",
+    title: "Enter & Play",
+    desc: "Pay the entry fee, submit your guess encrypted via Arcium, and compete for the pot.",
   },
   {
     num: "04",
@@ -226,8 +234,23 @@ export default function Home() {
   const [activeFeature, setActiveFeature] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [showSwap, setShowSwap] = useState(false);
+  const [selectedGame, setSelectedGame] = useState<GameType | null>(null);
+  const { rounds, gameConfig } = useGame();
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    const saved = localStorage.getItem("theme") as "dark" | "light" | null;
+    if (saved) setTheme(saved);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("theme", next);
+    document.documentElement.classList.remove("dark", "light");
+    document.documentElement.classList.add(next);
+  };
 
   // Prevent hydration mismatch — wallet state not known during SSR
   if (!mounted) {
@@ -262,6 +285,22 @@ export default function Home() {
               </span>
             </div>
             <div className="flex items-center gap-3">
+              {/* Theme Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="w-8 h-8 rounded-lg bg-bg-elevated border border-border hover:border-border-light flex items-center justify-center text-text-dim hover:text-text-primary transition-all"
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {theme === "dark" ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 006.002-2.082 9.718 9.718 0 003-3.916z" />
+                  </svg>
+                )}
+              </button>
               {/* Swap Button */}
               <button
                 onClick={() => setShowSwap(true)}
@@ -283,16 +322,59 @@ export default function Home() {
 
         {/* Connected Content */}
         <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <GameBoard />
+          {selectedGame === null ? (
+            /* ── Portal Hub ── */
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <PortalHub
+                  rounds={rounds}
+                  onSelectGame={setSelectedGame}
+                />
+              </div>
+              <div className="space-y-6">
+                <PlayerStats rounds={rounds} gameConfig={gameConfig} />
+                <Leaderboard />
+                <NFTDisplay />
+              </div>
             </div>
-            <div className="space-y-6">
-              <Leaderboard />
-              <NFTDisplay />
+          ) : (
+            /* ── Game Board ── */
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <GameBoard
+                  gameType={selectedGame}
+                  onBack={() => setSelectedGame(null)}
+                />
+              </div>
+              <div className="space-y-6">
+                <PlayerStats rounds={rounds} gameConfig={gameConfig} />
+                <Leaderboard />
+                <NFTDisplay />
+              </div>
             </div>
-          </div>
+          )}
         </div>
+
+        {/* Connected Footer */}
+        <footer className="border-t border-border/50 mt-8">
+          <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-text-dim">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-gradient-to-br from-accent-purple to-accent-cyan" />
+              <span>SolPot Arena</span>
+            </div>
+            <p>
+              Built by{" "}
+              <a
+                href="https://x.com/sambitsargam"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-purple hover:text-accent-violet transition-colors font-medium"
+              >
+                @sambitsargam
+              </a>
+            </p>
+          </div>
+        </footer>
       </main>
     );
   }
@@ -339,6 +421,21 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-lg bg-bg-elevated border border-border hover:border-border-light flex items-center justify-center text-text-dim hover:text-text-primary transition-all"
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 006.002-2.082 9.718 9.718 0 003-3.916z" />
+                </svg>
+              )}
+            </button>
             <span className="badge-green hidden sm:inline-flex">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-green animate-pulse" />
               Devnet
@@ -359,14 +456,14 @@ export default function Home() {
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.05] tracking-tight mb-6 opacity-0 animate-fade-up">
-              Guess the word.
+              Play. Guess.
               <br />
               <span className="text-gradient">Win the pot.</span>
             </h1>
 
             <p className="text-lg text-text-secondary leading-relaxed mb-8 max-w-md opacity-0 animate-fade-up-delayed">
-              An on-chain word game where your guess is encrypted, your entry is
-              swapped via Jupiter, and your victory earns an NFT trophy.
+              A multi-game arena on Solana — word guessing, lucky numbers, and
+              trivia challenges. All encrypted, all on-chain, all rewarding.
             </p>
 
             <div className="flex flex-wrap items-center gap-4 opacity-0 animate-fade-up-delayed">
@@ -689,8 +786,8 @@ export default function Home() {
               Ready to play?
             </h2>
             <p className="text-text-secondary max-w-md mx-auto mb-8">
-              Connect your wallet, enter a round, and test your word game
-              skills on Solana.
+              Connect your wallet, pick a game mode, and test your skills
+              on Solana.
             </p>
             <WalletMultiButtonDynamic />
           </div>
@@ -705,8 +802,15 @@ export default function Home() {
             <span>SolPot Arena</span>
           </div>
           <p>
-            Anchor &middot; Jupiter &middot; Metaplex &middot; Arcium &middot;
-            Magicblock
+            Built by{" "}
+            <a
+              href="https://x.com/sambitsargam"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent-purple hover:text-accent-violet transition-colors font-medium"
+            >
+              @sambitsargam
+            </a>
           </p>
         </div>
       </footer>
