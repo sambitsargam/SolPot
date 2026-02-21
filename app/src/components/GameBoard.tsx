@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useGame, type RoundWithKey } from "@/hooks/useGame";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import RoundInfo from "./RoundInfo";
@@ -46,8 +46,18 @@ function ActiveRound({
   refreshState: () => Promise<void>;
   gameType: GameType;
 }) {
+  const { hasEnteredRound } = useGame();
   const [joined, setJoined] = useState(false);
   const onJoined = useCallback(() => setJoined(true), []);
+
+  // Restore joined state if user already entered this round
+  useEffect(() => {
+    let cancelled = false;
+    hasEnteredRound(round.publicKey).then((entered) => {
+      if (!cancelled && entered) setJoined(true);
+    });
+    return () => { cancelled = true; };
+  }, [round.publicKey, hasEnteredRound]);
 
   // Render the appropriate guess component based on game type
   const renderGuessComponent = () => {

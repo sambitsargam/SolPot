@@ -104,6 +104,7 @@ export const ROUND_GAME_TYPES: Record<number, GameType> = {
   9: "trivia",
   10: "lucky-number",
   11: "lucky-number",
+  12: "lucky-number",
 };
 
 /**

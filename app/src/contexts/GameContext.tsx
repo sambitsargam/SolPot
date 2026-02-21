@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -66,6 +67,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [txPending, setTxPending] = useState(false);
+  const initialLoadDone = useRef(false);
 
   const getAnchorProvider = useCallback((): AnchorProvider | null => {
     if (!wallet.publicKey || !wallet.signTransaction) return null;
@@ -75,7 +77,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // Fetch game state — works without wallet using read-only provider
   const refreshState = useCallback(async () => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial fetch, not on refreshes
+      // This prevents the UI from flashing "0 rounds" after entering a round
+      if (!initialLoadDone.current) {
+        setLoading(true);
+      }
 
       // Use wallet provider if available, otherwise read-only
       const provider = getAnchorProvider();
@@ -102,6 +108,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setError("Game not initialized yet");
     } finally {
       setLoading(false);
+      initialLoadDone.current = true;
     }
   }, [connection, getAnchorProvider]);
 
