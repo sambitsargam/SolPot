@@ -102,13 +102,24 @@ pub struct PlayerEntry {
     pub player: Pubkey,
     pub round: Pubkey,
     pub entered_at: i64,
-    pub has_guessed: bool,
     pub bump: u8,
 }
 
 impl PlayerEntry {
     pub const SEED: &'static [u8] = b"player_entry";
-    pub const SIZE: usize = 8 + 32 + 32 + 8 + 1 + 1;
+    pub const SIZE: usize = 8 + 32 + 32 + 8 + 1;
+}
+
+/// Tiny PDA whose existence proves a player already submitted a guess.
+/// Seeds: ["guess_record", round, player]
+#[account]
+pub struct GuessRecord {
+    pub bump: u8,
+}
+
+impl GuessRecord {
+    pub const SEED: &'static [u8] = b"guess_record";
+    pub const SIZE: usize = 8 + 1;
 }
 
 #[account]
@@ -295,7 +306,6 @@ pub mod solpot {
         player_entry.player = ctx.accounts.player.key();
         player_entry.round = ctx.accounts.round.key();
         player_entry.entered_at = clock.unix_timestamp;
-        player_entry.has_guessed = false;
         player_entry.bump = ctx.bumps.player_entry;
 
         emit!(PlayerEntered {
@@ -309,8 +319,10 @@ pub mod solpot {
     }
 
     pub fn submit_guess(ctx: Context<SubmitGuess>, guess: String) -> Result<()> {
-        let player_entry = &mut ctx.accounts.player_entry;
-        require!(!player_entry.has_guessed, SolPotError::AlreadyGuessed);
+        // The guess_record PDA is `init` — if it already exists Anchor will
+        // reject the tx before we even reach this point (account already in use).
+        // So reaching here means this is the player's first guess.
+        ctx.accounts.guess_record.bump = ctx.bumps.guess_record;
 
         let round = &mut ctx.accounts.round;
 
@@ -326,9 +338,6 @@ pub mod solpot {
         let normalized = guess.to_lowercase();
         let guess_hash = hash(normalized.as_bytes());
         let is_correct = guess_hash.to_bytes() == round.word_hash;
-
-        // Mark that this player has used their one guess
-        player_entry.has_guessed = true;
 
         if is_correct {
             round.winner = ctx.accounts.player.key();
@@ -430,14 +439,12 @@ pub mod solpot {
         uri: String,
     ) -> Result<()> {
         // Build Metaplex Core CreateV1 instruction data manually.
-        // Discriminator = hashv(&[b"global:create"])[..8]  (Anchor-style)
-        // For Metaplex Core CreateV1 the first byte is the instruction enum index = 0
-        // followed by CreateV1InstructionArgs borsh-serialized
+        // CreateV1Args: data_state (u8) + name (String) + uri (String) + plugins (Option<Vec>)
         let mut data: Vec<u8> = Vec::new();
-        // Metaplex Core CreateV1 discriminator (instruction index 0)
+        // Metaplex Core CreateV1 discriminator (enum variant 0)
         data.push(0u8);
         // CreateV1Args:
-        //   data_state: CollectionToggle (0 = None)
+        //   data_state: DataState enum (0 = AccountState)
         data.push(0u8);
         //   name: borsh String (u32 LE length + bytes)
         data.extend_from_slice(&(name.len() as u32).to_le_bytes());
@@ -445,19 +452,23 @@ pub mod solpot {
         //   uri: borsh String
         data.extend_from_slice(&(uri.len() as u32).to_le_bytes());
         data.extend_from_slice(uri.as_bytes());
-        //   plugins: Option<Vec<PluginAuthorityPair>> = None
-        data.push(0u8);
-        //   external_plugins: Option<Vec<ExternalPluginAdapterInitInfo>> = None  
-        data.push(0u8);
+        //   plugins: Option<Vec<PluginAuthorityPair>> = Some(empty vec)
+        //   Must use Some([]) not None to match the SDK's serialization format
+        data.push(1u8); // Option tag: Some
+        data.extend_from_slice(&0u32.to_le_bytes()); // Vec length: 0
+
+        // Metaplex Core uses its own program ID as a sentinel for absent optional accounts.
+        let absent = MPL_CORE_PROGRAM_ID;
 
         let accounts = vec![
-            AccountMeta::new(ctx.accounts.asset.key(), true),         // asset (signer, writable)
-            AccountMeta::new_readonly(ctx.accounts.payer.key(), false), // collection (None → pass payer as placeholder, unused when no collection)
-            AccountMeta::new_readonly(ctx.accounts.payer.key(), false), // authority (optional)
-            AccountMeta::new(ctx.accounts.payer.key(), true),         // payer (signer, writable)
-            AccountMeta::new_readonly(ctx.accounts.winner.key(), false), // owner
-            AccountMeta::new_readonly(ctx.accounts.payer.key(), false), // update_authority
-            AccountMeta::new_readonly(ctx.accounts.system_program.key(), false), // system_program
+            AccountMeta::new(ctx.accounts.asset.key(), true),           // 0: asset (writable, signer)
+            AccountMeta::new_readonly(absent, false),                   // 1: collection (absent)
+            AccountMeta::new_readonly(absent, false),                   // 2: authority (absent → defaults to payer)
+            AccountMeta::new(ctx.accounts.payer.key(), true),           // 3: payer (writable, signer)
+            AccountMeta::new_readonly(ctx.accounts.winner.key(), false),// 4: owner (the winner)
+            AccountMeta::new_readonly(absent, false),                   // 5: update_authority (absent → defaults to payer)
+            AccountMeta::new_readonly(ctx.accounts.system_program.key(), false), // 6: system_program
+            AccountMeta::new_readonly(absent, false),                   // 7: log_wrapper (absent)
         ];
 
         let ix = Instruction {
@@ -644,19 +655,34 @@ pub struct SubmitGuess<'info> {
     pub round: Account<'info, Round>,
 
     #[account(
-        mut,
         seeds = [
             PlayerEntry::SEED,
             round.key().as_ref(),
             player.key().as_ref(),
         ],
-        bump = player_entry.bump,
+        bump,
         has_one = player,
         has_one = round,
     )]
     pub player_entry: Account<'info, PlayerEntry>,
 
+    #[account(
+        init,
+        payer = player,
+        space = GuessRecord::SIZE,
+        seeds = [
+            GuessRecord::SEED,
+            round.key().as_ref(),
+            player.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub guess_record: Account<'info, GuessRecord>,
+
+    #[account(mut)]
     pub player: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

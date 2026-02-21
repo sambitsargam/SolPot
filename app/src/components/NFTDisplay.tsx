@@ -101,9 +101,11 @@ export default function NFTDisplay() {
               key={nft.address}
               className="bg-bg-elevated rounded-xl p-3 flex items-center gap-3 border border-border hover:border-border-light transition-colors"
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-purple to-accent-cyan flex items-center justify-center text-sm font-bold">
-                SP
-              </div>
+              <img
+                src="https://bafybeiahrdgs6raqp7e3ww2ki7wibdjs76dit53gqpc6ver2pqamafloce.ipfs.spfs-gateway.thestratos.net/"
+                alt={nft.name}
+                className="w-10 h-10 rounded-xl object-cover"
+              />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">
                   {nft.name}

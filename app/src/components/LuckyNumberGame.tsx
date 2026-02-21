@@ -14,12 +14,13 @@ export default function LuckyNumberGame({
   joined: joinedProp,
   onGuessSubmitted,
 }: LuckyNumberGameProps) {
-  const { submitGuess, hasEnteredRound, txPending } = useGame();
+  const { submitGuess, hasEnteredRound, hasGuessedInRound, txPending } = useGame();
   const [selected, setSelected] = useState<number | null>(null);
   const [joinedLocal, setJoinedLocal] = useState(false);
   const [checkingEntry, setCheckingEntry] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [guessedNumbers, setGuessedNumbers] = useState<Set<number>>(new Set());
+  const [alreadyGuessed, setAlreadyGuessed] = useState(false);
+  const [submittedNumber, setSubmittedNumber] = useState<number | null>(null);
   const [result, setResult] = useState<{
     type: "success" | "error";
     message: string;
@@ -27,29 +28,33 @@ export default function LuckyNumberGame({
 
   const joined = joinedProp ?? joinedLocal;
 
-  // Check if user has entered this round
+  // Check if user has entered this round and already guessed
   useEffect(() => {
     let cancelled = false;
     setCheckingEntry(true);
-    hasEnteredRound(round.publicKey).then((entered) => {
+    Promise.all([
+      hasEnteredRound(round.publicKey),
+      hasGuessedInRound(round.publicKey),
+    ]).then(([entered, guessed]) => {
       if (!cancelled) {
         setJoinedLocal(entered);
+        setAlreadyGuessed(guessed);
         setCheckingEntry(false);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [round.publicKey, hasEnteredRound]);
+  }, [round.publicKey, hasEnteredRound, hasGuessedInRound]);
 
   const handleNumberClick = (num: number) => {
-    if (!joined || txPending || submitting || guessedNumbers.has(num)) return;
+    if (!joined || txPending || submitting || alreadyGuessed) return;
     setSelected(num);
     setResult(null);
   };
 
   const handleSubmit = async () => {
-    if (selected === null || !joined) return;
+    if (selected === null || !joined || alreadyGuessed) return;
 
     setSubmitting(true);
     setResult(null);
@@ -58,7 +63,8 @@ export default function LuckyNumberGame({
       // Submit the number as a string — the contract SHA-256 hashes it
       const txSig = await submitGuess(round.publicKey, String(selected));
 
-      setGuessedNumbers((prev) => new Set(prev).add(selected));
+      setSubmittedNumber(selected);
+      setAlreadyGuessed(true);
 
       if (onGuessSubmitted) {
         await onGuessSubmitted();
@@ -78,6 +84,9 @@ export default function LuckyNumberGame({
         });
       } else if (msg.includes("RoundExpired")) {
         setResult({ type: "error", message: "This round has expired." });
+      } else if (msg.includes("AlreadyGuessed") || msg.includes("already in use")) {
+        setAlreadyGuessed(true);
+        setResult({ type: "error", message: "You have already submitted a guess for this round." });
       } else {
         setResult({ type: "error", message: msg });
       }
@@ -150,46 +159,40 @@ export default function LuckyNumberGame({
         )}
       </div>
 
+      {/* Already guessed banner */}
+      {alreadyGuessed && (
+        <div className="mb-4 p-3 rounded-xl bg-accent-amber/10 border border-accent-amber/20 text-accent-amber text-sm flex items-center gap-2">
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          You&apos;ve already submitted your guess{submittedNumber ? ` (#${submittedNumber})` : ""}. One guess per round!
+        </div>
+      )}
+
       {/* Number Grid — 10×10 */}
       <div className="grid grid-cols-10 gap-1 mb-4">
         {Array.from({ length: 100 }, (_, i) => i + 1).map((num) => {
           const isSelected = selected === num;
-          const isGuessed = guessedNumbers.has(num);
 
           return (
             <button
               key={num}
               onClick={() => handleNumberClick(num)}
-              disabled={!joined || txPending || submitting || isGuessed}
+              disabled={!joined || txPending || submitting || alreadyGuessed}
               className={`
                 aspect-square rounded-lg text-[11px] font-mono font-bold
                 transition-all duration-150 relative
                 ${
                   isSelected
                     ? "bg-accent-cyan text-bg-primary border-accent-cyan shadow-lg shadow-accent-cyan/30 scale-110 z-10"
-                    : isGuessed
-                    ? "bg-accent-purple/20 text-accent-violet border-accent-purple/30 cursor-not-allowed"
+                    : alreadyGuessed
+                    ? "bg-bg-elevated/50 text-text-dim/40 border-border/50 cursor-not-allowed"
                     : "bg-bg-elevated text-text-dim border-border hover:bg-accent-cyan/10 hover:text-accent-cyan hover:border-accent-cyan/30"
                 }
                 border disabled:opacity-50
               `}
             >
               {num}
-              {isGuessed && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <svg
-                    className="w-3 h-3 text-accent-violet"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              )}
             </button>
           );
         })}
@@ -198,10 +201,12 @@ export default function LuckyNumberGame({
       {/* Submit button */}
       <button
         onClick={handleSubmit}
-        disabled={selected === null || txPending || submitting}
+        disabled={selected === null || txPending || submitting || alreadyGuessed}
         className="w-full py-3 rounded-xl font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-accent-cyan/10 border border-accent-cyan/20 text-accent-cyan hover:bg-accent-cyan/20 hover:border-accent-cyan/30"
       >
-        {submitting
+        {alreadyGuessed
+          ? "Guess Already Submitted"
+          : submitting
           ? "Submitting..."
           : selected !== null
           ? `Submit #${selected}`
@@ -221,7 +226,7 @@ export default function LuckyNumberGame({
             clipRule="evenodd"
           />
         </svg>
-        Number hashed on-chain via SHA-256
+        Encrypted via Arcium (x25519 ECDH + RescueCipher)
       </div>
 
       {/* Result */}

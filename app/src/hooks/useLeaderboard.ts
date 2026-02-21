@@ -6,6 +6,7 @@ import { AnchorProvider } from "@coral-xyz/anchor";
 import {
   getProgram,
   getProvider,
+  getReadOnlyProgram,
   fetchLeaderboard,
 } from "@/lib/program";
 import { getRealTimeManager } from "@/lib/magicblock";
@@ -23,16 +24,14 @@ export function useLeaderboard() {
     return getProvider(connection, wallet);
   }, [connection, wallet]);
 
-  // Fetch leaderboard data
+  // Fetch leaderboard data — works without wallet
   const refresh = useCallback(async () => {
-    const provider = getAnchorProvider();
-    if (!provider) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      const program = getProgram(provider);
+      const provider = getAnchorProvider();
+      const program = provider
+        ? getProgram(provider)
+        : getReadOnlyProgram(connection);
+
       const leaderboard = await fetchLeaderboard(program);
       if (leaderboard) {
         setEntries(leaderboard.entries);
@@ -42,7 +41,7 @@ export function useLeaderboard() {
     } finally {
       setLoading(false);
     }
-  }, [getAnchorProvider]);
+  }, [connection, getAnchorProvider]);
 
   // Initial fetch
   useEffect(() => {

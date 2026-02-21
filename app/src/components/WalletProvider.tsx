@@ -11,6 +11,7 @@ import {
   SolflareWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
 import { RPC_URL } from "@/lib/constants";
+import { GameProvider } from "@/contexts/GameContext";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
 
@@ -28,7 +29,9 @@ export function WalletContextProvider({ children }: { children: ReactNode }) {
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
+        <WalletModalProvider>
+          <GameProvider>{children}</GameProvider>
+        </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );

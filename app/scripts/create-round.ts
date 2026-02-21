@@ -140,19 +140,37 @@ async function main() {
 
   console.log("✓ Round #" + roundCount + " created! Tx:", sig);
 
-  // Output metadata to add to gameTypes.ts
-  console.log("\n─── Add to src/lib/gameTypes.ts ───");
-  console.log(`\nIn ROUND_GAME_TYPES, add:\n  ${roundCount}: "${gameType}",`);
+  // ── Auto-update gameTypes.ts ──
+  const gameTypesPath = path.resolve(__dirname, "../src/lib/gameTypes.ts");
+  let gameTypesContent = fs.readFileSync(gameTypesPath, "utf-8");
 
-  if (gameType === "trivia") {
-    console.log(`\nIn TRIVIA_QUESTIONS, add:`);
-    console.log(`  ${roundCount}: {`);
-    console.log(`    question: "${triviaQuestion}",`);
-    console.log(`    options: ${JSON.stringify(triviaOptions)},`);
-    console.log(`    category: "${triviaCategory}",`);
-    console.log(`  },`);
+  // Add to ROUND_GAME_TYPES
+  const roundMapRegex = /(export const ROUND_GAME_TYPES:\s*Record<number,\s*GameType>\s*=\s*\{[\s\S]*?)(};)/;
+  const match = gameTypesContent.match(roundMapRegex);
+  if (match) {
+    const existing = match[1];
+    const closing = match[2];
+    // Check if this round ID is already in the map
+    if (!existing.includes(`${roundCount}:`)) {
+      const newEntry = `  ${roundCount}: "${gameType}",\n`;
+      gameTypesContent = gameTypesContent.replace(roundMapRegex, `${existing}${newEntry}${closing}`);
+      console.log(`\n✓ Added round ${roundCount} → "${gameType}" to ROUND_GAME_TYPES`);
+    }
   }
 
+  // Add trivia question if applicable
+  if (gameType === "trivia" && triviaQuestion) {
+    const triviaMapRegex = /(export const TRIVIA_QUESTIONS:\s*Record<number,\s*TriviaQuestion>\s*=\s*\{[\s\S]*?)(};)/;
+    const triviaMatch = gameTypesContent.match(triviaMapRegex);
+    if (triviaMatch && !triviaMatch[1].includes(`${roundCount}:`)) {
+      const triviaEntry = `  ${roundCount}: {\n    question: ${JSON.stringify(triviaQuestion)},\n    options: ${JSON.stringify(triviaOptions)},\n    category: ${JSON.stringify(triviaCategory)},\n  },\n`;
+      gameTypesContent = gameTypesContent.replace(triviaMapRegex, `${triviaMatch[1]}${triviaEntry}${triviaMatch[2]}`);
+      console.log(`✓ Added trivia question for round ${roundCount}`);
+    }
+  }
+
+  fs.writeFileSync(gameTypesPath, gameTypesContent, "utf-8");
+  console.log("✓ gameTypes.ts updated automatically");
   console.log("\nRefresh the frontend to see the new round.");
 }
 

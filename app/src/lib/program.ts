@@ -20,6 +20,7 @@ import type {
   GameConfigAccount,
   RoundAccount,
   LeaderboardAccount,
+  PlayerEntryAccount,
 } from "./types";
 
 /**
@@ -83,7 +84,9 @@ const IDL: any = {
       accounts: [
         { name: "round", writable: true },
         { name: "player_entry" },
-        { name: "player", signer: true },
+        { name: "guess_record", writable: true },
+        { name: "player", writable: true, signer: true },
+        { name: "system_program" },
       ],
       args: [{ name: "guess", type: "string" }],
     },
@@ -183,6 +186,15 @@ const IDL: any = {
       },
     },
     {
+      name: "guess_record",
+      type: {
+        kind: "struct",
+        fields: [
+          { name: "bump", type: "u8" },
+        ],
+      },
+    },
+    {
       name: "leaderboard",
       type: {
         kind: "struct",
@@ -230,6 +242,7 @@ const IDL: any = {
     { code: 6014, name: "InvalidWordHash", msg: "Invalid word hash" },
     { code: 6015, name: "EntryFeeMismatch", msg: "Entry fee mismatch" },
     { code: 6016, name: "NftAlreadyMinted", msg: "NFT already minted" },
+    { code: 6017, name: "AlreadyGuessed", msg: "Player has already guessed" },
   ],
 };
 
@@ -273,6 +286,16 @@ export function getPlayerEntryPda(
   );
 }
 
+export function getGuessRecordPda(
+  round: PublicKey,
+  player: PublicKey
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(SEEDS.GUESS_RECORD), round.toBuffer(), player.toBuffer()],
+    PROGRAM_ID
+  );
+}
+
 // ── Program Client ──────────────────────────────────────────────
 
 export function getProgram(provider: AnchorProvider): Program {
@@ -287,6 +310,28 @@ export function getProvider(
     commitment: "confirmed",
     preflightCommitment: "confirmed",
   });
+}
+
+/**
+ * Create a read-only AnchorProvider (no wallet needed).
+ * Uses a dummy wallet so we can fetch accounts without requiring the user to connect.
+ */
+export function getReadOnlyProvider(connection: Connection): AnchorProvider {
+  const dummyWallet = {
+    publicKey: PublicKey.default,
+    signTransaction: async (tx: any) => tx,
+    signAllTransactions: async (txs: any) => txs,
+  };
+  return new AnchorProvider(connection, dummyWallet as any, {
+    commitment: "confirmed",
+  });
+}
+
+/**
+ * Create a Program instance for read-only operations (no wallet needed).
+ */
+export function getReadOnlyProgram(connection: Connection): Program {
+  return getProgram(getReadOnlyProvider(connection));
 }
 
 // ── Instruction Builders ────────────────────────────────────────
@@ -318,13 +363,16 @@ export async function buildSubmitGuessIx(
   guess: string
 ): Promise<TransactionInstruction> {
   const [playerEntryPda] = getPlayerEntryPda(roundPda, player);
+  const [guessRecordPda] = getGuessRecordPda(roundPda, player);
 
   return await program.methods
     .submitGuess(guess)
     .accountsStrict({
       round: roundPda,
       playerEntry: playerEntryPda,
+      guessRecord: guessRecordPda,
       player,
+      systemProgram: SystemProgram.programId,
     })
     .instruction();
 }
@@ -404,6 +452,25 @@ export async function fetchAllRounds(
     }));
   } catch {
     return [];
+  }
+}
+
+export async function fetchPlayerEntry(
+  program: Program,
+  roundPda: PublicKey,
+  player: PublicKey
+): Promise<PlayerEntryAccount | null> {
+  const [pda] = getPlayerEntryPda(roundPda, player);
+  try {
+    const account = await (program.account as any).playerEntry.fetch(pda);
+    return {
+      player: account.player,
+      round: account.round,
+      enteredAt: (account.enteredAt as BN).toNumber(),
+      bump: account.bump as number,
+    };
+  } catch {
+    return null;
   }
 }
 

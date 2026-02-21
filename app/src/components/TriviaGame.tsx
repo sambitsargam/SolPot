@@ -63,11 +63,12 @@ export default function TriviaGame({
   joined: joinedProp,
   onGuessSubmitted,
 }: TriviaGameProps) {
-  const { submitGuess, hasEnteredRound, txPending } = useGame();
+  const { submitGuess, hasEnteredRound, hasGuessedInRound, txPending } = useGame();
   const [selected, setSelected] = useState<number | null>(null);
   const [joinedLocal, setJoinedLocal] = useState(false);
   const [checkingEntry, setCheckingEntry] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [alreadyGuessed, setAlreadyGuessed] = useState(false);
   const [result, setResult] = useState<{
     type: "success" | "error";
     message: string;
@@ -76,29 +77,33 @@ export default function TriviaGame({
   const joined = joinedProp ?? joinedLocal;
   const triviaQ = getTriviaQuestion(round.account.id) ?? DEFAULT_QUESTION;
 
-  // Check if user has entered this round
+  // Check if user has entered this round and already guessed
   useEffect(() => {
     let cancelled = false;
     setCheckingEntry(true);
-    hasEnteredRound(round.publicKey).then((entered) => {
+    Promise.all([
+      hasEnteredRound(round.publicKey),
+      hasGuessedInRound(round.publicKey),
+    ]).then(([entered, guessed]) => {
       if (!cancelled) {
         setJoinedLocal(entered);
+        setAlreadyGuessed(guessed);
         setCheckingEntry(false);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [round.publicKey, hasEnteredRound]);
+  }, [round.publicKey, hasEnteredRound, hasGuessedInRound]);
 
   const handleOptionClick = (index: number) => {
-    if (!joined || txPending || submitting) return;
+    if (!joined || txPending || submitting || alreadyGuessed) return;
     setSelected(index);
     setResult(null);
   };
 
   const handleSubmit = async () => {
-    if (selected === null || !joined) return;
+    if (selected === null || !joined || alreadyGuessed) return;
 
     setSubmitting(true);
     setResult(null);
@@ -108,6 +113,8 @@ export default function TriviaGame({
       const answer = triviaQ.options[selected];
       const txSig = await submitGuess(round.publicKey, answer);
 
+      setAlreadyGuessed(true);
+
       if (onGuessSubmitted) {
         await onGuessSubmitted();
       }
@@ -116,7 +123,6 @@ export default function TriviaGame({
         type: "success",
         message: `Answer submitted! Tx: ${txSig.slice(0, 12)}...`,
       });
-      setSelected(null);
     } catch (err: any) {
       const msg = err.message || "Failed to submit answer";
       if (msg.includes("RoundAlreadyWon")) {
@@ -126,6 +132,9 @@ export default function TriviaGame({
         });
       } else if (msg.includes("RoundExpired")) {
         setResult({ type: "error", message: "This round has expired." });
+      } else if (msg.includes("AlreadyGuessed") || msg.includes("already in use")) {
+        setAlreadyGuessed(true);
+        setResult({ type: "error", message: "You have already submitted an answer for this round." });
       } else {
         setResult({ type: "error", message: msg });
       }
@@ -206,6 +215,16 @@ export default function TriviaGame({
         </p>
       </div>
 
+      {/* Already guessed banner */}
+      {alreadyGuessed && (
+        <div className="mb-4 p-3 rounded-xl bg-accent-amber/10 border border-accent-amber/20 text-accent-amber text-sm flex items-center gap-2">
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          You&apos;ve already submitted your answer. One guess per round!
+        </div>
+      )}
+
       {/* Options */}
       <div className="space-y-2 mb-4">
         {triviaQ.options.map((option, i) => {
@@ -216,11 +235,13 @@ export default function TriviaGame({
             <button
               key={i}
               onClick={() => handleOptionClick(i)}
-              disabled={!joined || txPending || submitting}
+              disabled={!joined || txPending || submitting || alreadyGuessed}
               className={`w-full flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left
                 ${
                   isSelected
                     ? `${colors.activeBg} ${colors.activeBorder} shadow-sm`
+                    : alreadyGuessed
+                    ? "bg-bg-elevated/50 border-border/50 cursor-not-allowed"
                     : `${colors.bg} ${colors.border} ${colors.hoverBg} ${colors.hoverBorder}`
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
@@ -272,17 +293,19 @@ export default function TriviaGame({
       {/* Submit */}
       <button
         onClick={handleSubmit}
-        disabled={selected === null || txPending || submitting}
+        disabled={selected === null || txPending || submitting || alreadyGuessed}
         className="w-full py-3 rounded-xl font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-accent-amber/10 border border-accent-amber/20 text-accent-amber hover:bg-accent-amber/20 hover:border-accent-amber/30"
       >
-        {submitting
+        {alreadyGuessed
+          ? "Answer Already Submitted"
+          : submitting
           ? "Submitting..."
           : selected !== null
           ? `Submit Answer ${OPTION_LETTERS[selected]}`
           : "Select an answer"}
       </button>
 
-      {/* On-chain indicator */}
+      {/* Encryption indicator */}
       <div className="flex items-center gap-2 text-[11px] text-text-dim mt-3">
         <svg
           className="w-3 h-3 text-accent-green"
@@ -295,7 +318,7 @@ export default function TriviaGame({
             clipRule="evenodd"
           />
         </svg>
-        Answer verified on-chain via SHA-256 hash
+        Encrypted via Arcium (x25519 ECDH + RescueCipher)
       </div>
 
       {/* Result */}

@@ -64,5 +64,6 @@ export const SEEDS = {
   GAME_CONFIG: "game_config",
   ROUND: "round",
   PLAYER_ENTRY: "player_entry",
+  GUESS_RECORD: "guess_record",
   LEADERBOARD: "leaderboard",
 } as const;
