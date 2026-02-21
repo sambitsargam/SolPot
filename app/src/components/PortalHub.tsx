@@ -187,7 +187,7 @@ export default function PortalHub({
         {[
           { label: "Anchor", color: "text-accent-purple" },
           { label: "Jupiter", color: "text-accent-cyan" },
-          { label: "Metaplex", color: "text-accent-amber" },
+          { label: "Metaplex Core", color: "text-accent-amber" },
           { label: "Arcium", color: "text-accent-violet" },
           { label: "Magicblock", color: "text-accent-green" },
         ].map((p) => (

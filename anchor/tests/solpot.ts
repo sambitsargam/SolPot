@@ -1,7 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram, Keypair, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
 import { createHash } from "crypto";
 
@@ -20,8 +19,8 @@ describe("solpot", () => {
   const SECRET_WORD = "solana";
   const WORD_HASH = createHash("sha256").update(SECRET_WORD).digest();
 
-  const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
-    "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+  const MPL_CORE_PROGRAM_ID = new PublicKey(
+    "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
   );
 
   // Derive PDAs
@@ -247,56 +246,24 @@ describe("solpot", () => {
     expect(roundAfter.potDistributed).to.be.true;
     expect(roundAfter.potLamports.toNumber()).to.equal(0);
 
-    // Mint NFT reward
-    const nftMint = Keypair.generate();
-    const [tokenAccount] = PublicKey.findProgramAddressSync(
-      [
-        player.publicKey.toBuffer(),
-        TOKEN_PROGRAM_ID.toBuffer(),
-        nftMint.publicKey.toBuffer(),
-      ],
-      ASSOCIATED_TOKEN_PROGRAM_ID
-    );
-    const [metadataAccount] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("metadata"),
-        TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-        nftMint.publicKey.toBuffer(),
-      ],
-      TOKEN_METADATA_PROGRAM_ID
-    );
-    const [masterEdition] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("metadata"),
-        TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-        nftMint.publicKey.toBuffer(),
-        Buffer.from("edition"),
-      ],
-      TOKEN_METADATA_PROGRAM_ID
-    );
+    // Mint NFT reward using Metaplex Core
+    const assetKeypair = Keypair.generate();
 
     const mintTx = await program.methods
       .mintRewardNft(
         "SolPot Winner #0",
-        "SOLPOT",
         "https://arweave.net/solpot-winner-0"
       )
       .accountsStrict({
         gameConfig: gameConfigPda,
         round: roundPda,
-        nftMint: nftMint.publicKey,
-        tokenAccount,
+        asset: assetKeypair.publicKey,
         winner: player.publicKey,
-        metadataAccount,
-        masterEdition,
         payer: authority.publicKey,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        metadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        mplCoreProgram: MPL_CORE_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([nftMint])
+      .signers([assetKeypair])
       .rpc();
 
     console.log("Mint NFT tx:", mintTx);

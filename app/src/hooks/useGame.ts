@@ -11,25 +11,17 @@ import {
   getLeaderboardPda,
   getRoundPda,
   getPlayerEntryPda,
-  getMetadataPda,
-  getMasterEditionPda,
   fetchGameConfig,
   fetchAllRounds,
   fetchRound,
   buildEnterRoundIx,
   buildSubmitGuessIx,
 } from "@/lib/program";
-import { TOKEN_METADATA_PROGRAM_ID } from "@/lib/constants";
+import { MPL_CORE_PROGRAM_ID } from "@/lib/constants";
 import {
   Keypair,
   SystemProgram,
-  SYSVAR_RENT_PUBKEY,
 } from "@solana/web3.js";
-import {
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
 import { buildSwapAndEnterTransaction } from "@/lib/jupiter";
 import { WSOL_MINT } from "@/lib/constants";
 import type { GameConfigAccount, RoundAccount } from "@/lib/types";
@@ -264,36 +256,24 @@ export function useGame() {
         const program = getProgram(provider);
         const [gameConfigPda] = getGameConfigPda();
 
-        const nftMint = Keypair.generate();
-        const tokenAccount = getAssociatedTokenAddressSync(
-          nftMint.publicKey,
-          winnerPubkey
-        );
-        const metadataAccount = getMetadataPda(nftMint.publicKey);
-        const masterEdition = getMasterEditionPda(nftMint.publicKey);
+        // Generate a new keypair for the Metaplex Core asset
+        const assetKeypair = Keypair.generate();
 
         const txSig = await program.methods
           .mintRewardNft(
             `SolPot Winner #${roundId}`,
-            "SOLPOT",
             `https://solpot.app/api/nft/${roundId}`
           )
           .accountsStrict({
             gameConfig: gameConfigPda,
             round: roundPda,
-            nftMint: nftMint.publicKey,
-            tokenAccount,
+            asset: assetKeypair.publicKey,
             winner: winnerPubkey,
-            metadataAccount,
-            masterEdition,
             payer: wallet.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            metadataProgram: TOKEN_METADATA_PROGRAM_ID,
+            mplCoreProgram: MPL_CORE_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
-            rent: SYSVAR_RENT_PUBKEY,
           })
-          .signers([nftMint])
+          .signers([assetKeypair])
           .rpc({ commitment: "confirmed" });
 
         await refreshState();

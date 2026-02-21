@@ -5,7 +5,7 @@ import { WalletContextProvider } from "@/components/WalletProvider";
 export const metadata: Metadata = {
   title: "SolPot Arena — On-chain Word Guessing on Solana",
   description:
-    "Real-time encrypted on-chain word guessing game on Solana with Jupiter swaps, Arcium encryption, Metaplex NFT rewards, and Magicblock real-time updates.",
+    "Multi-game on-chain arena on Solana with Jupiter swaps, Arcium encryption, Metaplex Core NFT rewards, and Magicblock real-time updates.",
 };
 
 export default function RootLayout({

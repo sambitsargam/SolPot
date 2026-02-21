@@ -3,20 +3,77 @@
 import { useState, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { TOKEN_METADATA_PROGRAM_ID } from "@/lib/constants";
+import { MPL_CORE_PROGRAM_ID } from "@/lib/constants";
 
-interface NFTMeta {
-  mint: string;
+interface CoreAsset {
+  address: string;
   name: string;
-  symbol: string;
   uri: string;
+}
+
+/**
+ * Parse a Metaplex Core asset account's data to extract name and URI.
+ * Core asset layout (simplified):
+ *   [0]      key (1 byte, Key::AssetV1 = 1)
+ *   [1..33]  owner (32 bytes)
+ *   [33..34] update_authority type (1 byte)
+ *   [34..66] update_authority address (32 bytes)
+ *   [66..70] name length (4 bytes LE borsh String)
+ *   [70..70+nameLen] name UTF-8 bytes
+ *   Then uri length + uri
+ */
+function parseCoreAsset(
+  address: string,
+  data: Buffer
+): CoreAsset | null {
+  try {
+    const key = data[0];
+    // Key::AssetV1 = 1
+    if (key !== 1) return null;
+
+    let offset = 1 + 32; // skip key + owner
+
+    // update_authority: enum discriminator (1 byte) + optional pubkey (32 bytes)
+    const uaType = data[offset];
+    offset += 1;
+    if (uaType === 1 || uaType === 2) {
+      // Address or Collection - has a 32-byte pubkey
+      offset += 32;
+    }
+
+    // name (borsh String: 4-byte LE length + UTF-8 bytes)
+    if (offset + 4 > data.length) return null;
+    const nameLen = data.readUInt32LE(offset);
+    offset += 4;
+    if (offset + nameLen > data.length || nameLen > 200) return null;
+    const name = data
+      .subarray(offset, offset + nameLen)
+      .toString("utf8")
+      .replace(/\0/g, "")
+      .trim();
+    offset += nameLen;
+
+    // uri (borsh String: 4-byte LE length + UTF-8 bytes)
+    if (offset + 4 > data.length) return null;
+    const uriLen = data.readUInt32LE(offset);
+    offset += 4;
+    if (offset + uriLen > data.length || uriLen > 500) return null;
+    const uri = data
+      .subarray(offset, offset + uriLen)
+      .toString("utf8")
+      .replace(/\0/g, "")
+      .trim();
+
+    return { address, name, uri };
+  } catch {
+    return null;
+  }
 }
 
 export default function NFTDisplay() {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
-  const [nfts, setNfts] = useState<NFTMeta[]>([]);
+  const [nfts, setNfts] = useState<CoreAsset[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -25,62 +82,33 @@ export default function NFTDisplay() {
     const fetchNFTs = async () => {
       setLoading(true);
       try {
-        // Fetch all token accounts owned by the user
-        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-          publicKey,
-          { programId: TOKEN_PROGRAM_ID }
+        // Fetch all Metaplex Core assets owned by this wallet using GPA
+        const accounts = await connection.getProgramAccounts(
+          MPL_CORE_PROGRAM_ID,
+          {
+            filters: [
+              { memcmp: { offset: 1, bytes: publicKey.toBase58() } }, // owner at offset 1
+            ],
+          }
         );
 
-        const nftMints: NFTMeta[] = [];
-
-        for (const { account } of tokenAccounts.value) {
-          const parsed = account.data.parsed;
-          const info = parsed.info;
-          const amount = info.tokenAmount;
-
-          // NFTs have decimals=0 and amount=1
+        const solpotAssets: CoreAsset[] = [];
+        for (const { pubkey, account } of accounts) {
+          const asset = parseCoreAsset(
+            pubkey.toBase58(),
+            account.data as Buffer
+          );
           if (
-            amount.decimals === 0 &&
-            amount.uiAmount === 1
+            asset &&
+            (asset.name.includes("SolPot") || asset.name.includes("SOLPOT"))
           ) {
-            const mintPubkey = new PublicKey(info.mint);
-
-            // Derive metadata PDA
-            const [metadataPda] = PublicKey.findProgramAddressSync(
-              [
-                Buffer.from("metadata"),
-                TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-                mintPubkey.toBuffer(),
-              ],
-              TOKEN_METADATA_PROGRAM_ID
-            );
-
-            try {
-              const metadataAccount =
-                await connection.getAccountInfo(metadataPda);
-              if (metadataAccount) {
-                // Parse metadata (simplified — reads name, symbol, uri from raw bytes)
-                const metadata = parseMetadata(metadataAccount.data);
-                if (
-                  metadata &&
-                  (metadata.name.includes("SolPot") ||
-                    metadata.symbol === "SOLPOT")
-                ) {
-                  nftMints.push({
-                    mint: info.mint,
-                    ...metadata,
-                  });
-                }
-              }
-            } catch {
-              // Skip if metadata fetch fails
-            }
+            solpotAssets.push(asset);
           }
         }
 
-        setNfts(nftMints);
+        setNfts(solpotAssets);
       } catch (err) {
-        console.error("Failed to fetch NFTs:", err);
+        console.error("Failed to fetch Core assets:", err);
       } finally {
         setLoading(false);
       }
@@ -130,20 +158,22 @@ export default function NFTDisplay() {
         <div className="space-y-2">
           {nfts.map((nft) => (
             <div
-              key={nft.mint}
+              key={nft.address}
               className="bg-bg-elevated rounded-xl p-3 flex items-center gap-3 border border-border hover:border-border-light transition-colors"
             >
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-purple to-accent-cyan flex items-center justify-center text-sm font-bold">
-                {nft.symbol.slice(0, 2)}
+                SP
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary truncate">{nft.name}</p>
+                <p className="text-sm font-medium text-text-primary truncate">
+                  {nft.name}
+                </p>
                 <p className="text-[11px] text-text-dim font-mono truncate">
-                  {nft.mint.slice(0, 8)}...{nft.mint.slice(-4)}
+                  {nft.address.slice(0, 8)}...{nft.address.slice(-4)}
                 </p>
               </div>
               <a
-                href={`https://explorer.solana.com/address/${nft.mint}?cluster=devnet`}
+                href={`https://core.metaplex.com/explorer/${nft.address}?env=devnet`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[11px] text-accent-violet hover:text-accent-purple transition-colors"
@@ -156,59 +186,4 @@ export default function NFTDisplay() {
       )}
     </div>
   );
-}
-
-/**
- * Minimal Metaplex metadata parser.
- * Reads name, symbol, and URI from the raw metadata account bytes.
- * See: https://developers.metaplex.com/token-metadata
- */
-function parseMetadata(
-  data: Buffer
-): { name: string; symbol: string; uri: string } | null {
-  try {
-    // Metadata account layout (simplified):
-    // [0]     key (1 byte)
-    // [1..33] update_authority (32 bytes)
-    // [33..65] mint (32 bytes)
-    // [65..69] name length (4 bytes LE)
-    // [69..69+len] name
-    // Then symbol length + symbol
-    // Then uri length + uri
-
-    let offset = 1 + 32 + 32; // Skip key + update_authority + mint
-
-    // Read name
-    const nameLen = data.readUInt32LE(offset);
-    offset += 4;
-    const name = data
-      .subarray(offset, offset + nameLen)
-      .toString("utf8")
-      .replace(/\0/g, "")
-      .trim();
-    offset += nameLen;
-
-    // Read symbol
-    const symbolLen = data.readUInt32LE(offset);
-    offset += 4;
-    const symbol = data
-      .subarray(offset, offset + symbolLen)
-      .toString("utf8")
-      .replace(/\0/g, "")
-      .trim();
-    offset += symbolLen;
-
-    // Read URI
-    const uriLen = data.readUInt32LE(offset);
-    offset += 4;
-    const uri = data
-      .subarray(offset, offset + uriLen)
-      .toString("utf8")
-      .replace(/\0/g, "")
-      .trim();
-
-    return { name, symbol, uri };
-  } catch {
-    return null;
-  }
 }

@@ -14,7 +14,7 @@ import {
   PROGRAM_ID,
   RPC_URL,
   SEEDS,
-  TOKEN_METADATA_PROGRAM_ID,
+  MPL_CORE_PROGRAM_ID,
 } from "./constants";
 import type {
   GameConfigAccount,
@@ -105,21 +105,14 @@ const IDL: any = {
       accounts: [
         { name: "game_config" },
         { name: "round", writable: true },
-        { name: "nft_mint", writable: true, signer: true },
-        { name: "token_account", writable: true },
+        { name: "asset", writable: true, signer: true },
         { name: "winner" },
-        { name: "metadata_account", writable: true },
-        { name: "master_edition", writable: true },
         { name: "payer", writable: true, signer: true },
-        { name: "token_program" },
-        { name: "associated_token_program" },
-        { name: "metadata_program" },
+        { name: "mpl_core_program" },
         { name: "system_program" },
-        { name: "rent" },
       ],
       args: [
         { name: "name", type: "string" },
-        { name: "symbol", type: "string" },
         { name: "uri", type: "string" },
       ],
     },
@@ -278,31 +271,6 @@ export function getPlayerEntryPda(
     [Buffer.from(SEEDS.PLAYER_ENTRY), round.toBuffer(), player.toBuffer()],
     PROGRAM_ID
   );
-}
-
-export function getMetadataPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [
-      Buffer.from("metadata"),
-      TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-      mint.toBuffer(),
-    ],
-    TOKEN_METADATA_PROGRAM_ID
-  );
-  return pda;
-}
-
-export function getMasterEditionPda(mint: PublicKey): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync(
-    [
-      Buffer.from("metadata"),
-      TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-      mint.toBuffer(),
-      Buffer.from("edition"),
-    ],
-    TOKEN_METADATA_PROGRAM_ID
-  );
-  return pda;
 }
 
 // ── Program Client ──────────────────────────────────────────────

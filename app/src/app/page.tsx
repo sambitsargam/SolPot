@@ -164,9 +164,9 @@ const features = [
   },
   {
     icon: <IconTrophy />,
-    title: "Metaplex NFT Trophies",
+    title: "Metaplex Core NFT Trophies",
     description:
-      "Winners receive a unique on-chain NFT minted via Metaplex Token Metadata. Collect trophies per round — proof of your wins forever.",
+      "Winners receive a unique on-chain NFT minted via Metaplex Core — a single-account asset that's 80% cheaper. Collect trophies per round — proof of your wins forever.",
     color: "text-accent-amber",
     bg: "bg-accent-amber/10",
     borderColor: "border-accent-amber/20",
@@ -223,7 +223,7 @@ const steps = [
   {
     num: "04",
     title: "Win the Pot",
-    desc: "Guess correctly to win the entire pot and earn a Metaplex NFT trophy.",
+    desc: "Guess correctly to win the entire pot and earn a Metaplex Core NFT trophy.",
   },
 ];
 
@@ -635,10 +635,10 @@ export default function Home() {
                   )}
                   {activeFeature === 2 && (
                     <div className="space-y-1">
-                      <p><span className="text-accent-amber">metaplex</span>.nfts().create({"{"}</p>
+                      <p><span className="text-accent-amber">mplCore</span>.create(umi, {"{"})</p>
                       <p className="pl-4">name: <span className="text-accent-amber">&quot;SolPot Winner #42&quot;</span>,</p>
-                      <p className="pl-4">symbol: <span className="text-accent-amber">&quot;SOLPOT&quot;</span>,</p>
-                      <p className="pl-4">sellerFeeBasisPoints: <span className="text-accent-green">0</span></p>
+                      <p className="pl-4">uri: <span className="text-accent-amber">&quot;https://...&quot;</span>,</p>
+                      <p className="pl-4">owner: <span className="text-accent-green">winnerAddress</span></p>
                       <p>{"}"})</p>
                     </div>
                   )}
@@ -751,7 +751,7 @@ export default function Home() {
               color: "text-accent-cyan",
             },
             {
-              name: "Metaplex",
+              name: "Metaplex Core",
               role: "NFT Standard",
               color: "text-accent-amber",
             },

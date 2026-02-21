@@ -21,9 +21,9 @@ export const JUPITER_API_BASE = "https://api.jup.ag/swap/v1";
 export const JUPITER_API_KEY =
   process.env.NEXT_PUBLIC_JUPITER_API_KEY || "";
 
-/** Metaplex Token Metadata program ID */
-export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
-  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+/** Metaplex Core program ID */
+export const MPL_CORE_PROGRAM_ID = new PublicKey(
+  "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
 );
 
 /** Wrapped SOL mint address */

@@ -1,15 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hash;
 use anchor_lang::system_program::{transfer, Transfer};
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    metadata::{
-        create_master_edition_v3, create_metadata_accounts_v3, CreateMasterEditionV3,
-        CreateMetadataAccountsV3, Metadata,
-    },
-    token::{mint_to, Mint, MintTo, Token, TokenAccount},
-};
-use anchor_spl::metadata::mpl_token_metadata::types::{Creator, DataV2};
+use mpl_core::instructions::CreateV1CpiBuilder;
 
 declare_id!("22tsqvygTkEoomxNduhqEPYKA3DXfPPzNLXVxv9DAp8A");
 
@@ -415,85 +407,24 @@ pub mod solpot {
     pub fn mint_reward_nft(
         ctx: Context<MintRewardNft>,
         name: String,
-        symbol: String,
         uri: String,
     ) -> Result<()> {
-        let bump = ctx.accounts.game_config.bump;
-        let seeds: &[&[u8]] = &[GameConfig::SEED, &[bump]];
-        let signer_seeds = &[seeds];
-
-        mint_to(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                MintTo {
-                    mint: ctx.accounts.nft_mint.to_account_info(),
-                    to: ctx.accounts.token_account.to_account_info(),
-                    authority: ctx.accounts.game_config.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            1,
-        )?;
-
-        let data_v2 = DataV2 {
-            name,
-            symbol,
-            uri,
-            seller_fee_basis_points: 0,
-            creators: Some(vec![Creator {
-                address: ctx.accounts.game_config.key(),
-                verified: true,
-                share: 100,
-            }]),
-            collection: None,
-            uses: None,
-        };
-
-        create_metadata_accounts_v3(
-            CpiContext::new_with_signer(
-                ctx.accounts.metadata_program.to_account_info(),
-                CreateMetadataAccountsV3 {
-                    metadata: ctx.accounts.metadata_account.to_account_info(),
-                    mint: ctx.accounts.nft_mint.to_account_info(),
-                    mint_authority: ctx.accounts.game_config.to_account_info(),
-                    update_authority: ctx.accounts.game_config.to_account_info(),
-                    payer: ctx.accounts.payer.to_account_info(),
-                    system_program: ctx.accounts.system_program.to_account_info(),
-                    rent: ctx.accounts.rent.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            data_v2,
-            true,
-            true,
-            None,
-        )?;
-
-        create_master_edition_v3(
-            CpiContext::new_with_signer(
-                ctx.accounts.metadata_program.to_account_info(),
-                CreateMasterEditionV3 {
-                    edition: ctx.accounts.master_edition.to_account_info(),
-                    mint: ctx.accounts.nft_mint.to_account_info(),
-                    update_authority: ctx.accounts.game_config.to_account_info(),
-                    mint_authority: ctx.accounts.game_config.to_account_info(),
-                    metadata: ctx.accounts.metadata_account.to_account_info(),
-                    payer: ctx.accounts.payer.to_account_info(),
-                    token_program: ctx.accounts.token_program.to_account_info(),
-                    system_program: ctx.accounts.system_program.to_account_info(),
-                    rent: ctx.accounts.rent.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            Some(0),
-        )?;
+        // Create a Metaplex Core asset via CPI
+        CreateV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
+            .asset(&ctx.accounts.asset.to_account_info())
+            .payer(&ctx.accounts.payer.to_account_info())
+            .owner(Some(&ctx.accounts.winner.to_account_info()))
+            .system_program(&ctx.accounts.system_program.to_account_info())
+            .name(name)
+            .uri(uri)
+            .invoke()?;
 
         ctx.accounts.round.nft_minted = true;
 
         emit!(NftMinted {
             round_id: ctx.accounts.round.id,
             winner: ctx.accounts.winner.key(),
-            mint: ctx.accounts.nft_mint.key(),
+            mint: ctx.accounts.asset.key(),
         });
 
         Ok(())
@@ -734,22 +665,9 @@ pub struct MintRewardNft<'info> {
     )]
     pub round: Box<Account<'info, Round>>,
 
-    #[account(
-        init,
-        payer = payer,
-        mint::decimals = 0,
-        mint::authority = game_config,
-        mint::freeze_authority = game_config,
-    )]
-    pub nft_mint: Box<Account<'info, Mint>>,
-
-    #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = nft_mint,
-        associated_token::authority = winner,
-    )]
-    pub token_account: Box<Account<'info, TokenAccount>>,
+    /// CHECK: New Metaplex Core asset account (created by CPI)
+    #[account(mut, signer)]
+    pub asset: AccountInfo<'info>,
 
     /// CHECK: Winner account verified against round.winner
     #[account(
@@ -757,22 +675,14 @@ pub struct MintRewardNft<'info> {
     )]
     pub winner: AccountInfo<'info>,
 
-    /// CHECK: Metadata PDA derived by Token Metadata program
-    #[account(mut)]
-    pub metadata_account: UncheckedAccount<'info>,
-
-    /// CHECK: Master Edition PDA derived by Token Metadata program
-    #[account(mut)]
-    pub master_edition: UncheckedAccount<'info>,
-
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub metadata_program: Program<'info, Metadata>,
+    /// CHECK: Metaplex Core program verified by address
+    #[account(address = mpl_core::ID)]
+    pub mpl_core_program: AccountInfo<'info>,
+
     pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
