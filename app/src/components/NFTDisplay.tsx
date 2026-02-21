@@ -2,72 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
-import { MPL_CORE_PROGRAM_ID } from "@/lib/constants";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { mplCore, fetchAssetsByOwner } from "@metaplex-foundation/mpl-core";
+import { publicKey as umiPublicKey } from "@metaplex-foundation/umi";
+import { RPC_URL } from "@/lib/constants";
 
 interface CoreAsset {
   address: string;
   name: string;
   uri: string;
-}
-
-/**
- * Parse a Metaplex Core asset account's data to extract name and URI.
- * Core asset layout (simplified):
- *   [0]      key (1 byte, Key::AssetV1 = 1)
- *   [1..33]  owner (32 bytes)
- *   [33..34] update_authority type (1 byte)
- *   [34..66] update_authority address (32 bytes)
- *   [66..70] name length (4 bytes LE borsh String)
- *   [70..70+nameLen] name UTF-8 bytes
- *   Then uri length + uri
- */
-function parseCoreAsset(
-  address: string,
-  data: Buffer
-): CoreAsset | null {
-  try {
-    const key = data[0];
-    // Key::AssetV1 = 1
-    if (key !== 1) return null;
-
-    let offset = 1 + 32; // skip key + owner
-
-    // update_authority: enum discriminator (1 byte) + optional pubkey (32 bytes)
-    const uaType = data[offset];
-    offset += 1;
-    if (uaType === 1 || uaType === 2) {
-      // Address or Collection - has a 32-byte pubkey
-      offset += 32;
-    }
-
-    // name (borsh String: 4-byte LE length + UTF-8 bytes)
-    if (offset + 4 > data.length) return null;
-    const nameLen = data.readUInt32LE(offset);
-    offset += 4;
-    if (offset + nameLen > data.length || nameLen > 200) return null;
-    const name = data
-      .subarray(offset, offset + nameLen)
-      .toString("utf8")
-      .replace(/\0/g, "")
-      .trim();
-    offset += nameLen;
-
-    // uri (borsh String: 4-byte LE length + UTF-8 bytes)
-    if (offset + 4 > data.length) return null;
-    const uriLen = data.readUInt32LE(offset);
-    offset += 4;
-    if (offset + uriLen > data.length || uriLen > 500) return null;
-    const uri = data
-      .subarray(offset, offset + uriLen)
-      .toString("utf8")
-      .replace(/\0/g, "")
-      .trim();
-
-    return { address, name, uri };
-  } catch {
-    return null;
-  }
 }
 
 export default function NFTDisplay() {
@@ -82,29 +25,26 @@ export default function NFTDisplay() {
     const fetchNFTs = async () => {
       setLoading(true);
       try {
-        // Fetch all Metaplex Core assets owned by this wallet using GPA
-        const accounts = await connection.getProgramAccounts(
-          MPL_CORE_PROGRAM_ID,
-          {
-            filters: [
-              { memcmp: { offset: 1, bytes: publicKey.toBase58() } }, // owner at offset 1
-            ],
-          }
+        // Create Umi instance with Metaplex Core plugin
+        const umi = createUmi(RPC_URL).use(mplCore());
+
+        // Fetch all Core assets owned by this wallet via the official SDK
+        const assets = await fetchAssetsByOwner(
+          umi,
+          umiPublicKey(publicKey.toBase58())
         );
 
-        const solpotAssets: CoreAsset[] = [];
-        for (const { pubkey, account } of accounts) {
-          const asset = parseCoreAsset(
-            pubkey.toBase58(),
-            account.data as Buffer
-          );
-          if (
-            asset &&
-            (asset.name.includes("SolPot") || asset.name.includes("SOLPOT"))
-          ) {
-            solpotAssets.push(asset);
-          }
-        }
+        // Filter for SolPot trophies
+        const solpotAssets: CoreAsset[] = assets
+          .filter(
+            (a) =>
+              a.name.includes("SolPot") || a.name.includes("SOLPOT")
+          )
+          .map((a) => ({
+            address: a.publicKey.toString(),
+            name: a.name,
+            uri: a.uri,
+          }));
 
         setNfts(solpotAssets);
       } catch (err) {

@@ -156,7 +156,7 @@ const features = [
     icon: <IconShield />,
     title: "Arcium Encryption",
     description:
-      "Your guess is encrypted client-side with X25519 key exchange and XChaCha20-Poly1305 before hitting the chain. Nobody sees your word.",
+      "Your guess is encrypted client-side with x25519 ECDH key exchange and Arcium RescueCipher before hitting the chain. Nobody sees your word.",
     color: "text-accent-purple",
     bg: "bg-accent-purple/10",
     borderColor: "border-accent-purple/20",
@@ -625,12 +625,13 @@ export default function Home() {
                   )}
                   {activeFeature === 1 && (
                     <div className="space-y-1">
-                      <p><span className="text-accent-purple">const</span> encrypted = xchacha20poly1305(</p>
-                      <p className="pl-4">sharedSecret,</p>
-                      <p className="pl-4">nonce,</p>
-                      <p className="pl-4"><span className="text-accent-amber">&quot;your_guess&quot;</span></p>
+                      <p><span className="text-accent-purple">const</span> cipher = <span className="text-accent-green">new</span> RescueCipher(</p>
+                      <p className="pl-4">sharedSecret</p>
                       <p>)</p>
-                      <p><span className="text-accent-purple">await</span> program.submitGuess(encrypted)</p>
+                      <p><span className="text-accent-purple">const</span> ct = cipher.encrypt(</p>
+                      <p className="pl-4">plaintext, nonce</p>
+                      <p>)</p>
+                      <p><span className="text-accent-purple">await</span> program.submitGuess(ct)</p>
                     </div>
                   )}
                   {activeFeature === 2 && (

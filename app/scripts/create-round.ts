@@ -129,7 +129,7 @@ async function main() {
     data: encodeCreateRoundArgs(
       Array.from(wordHash),
       10,       // max 10 players
-      7200n     // 2 hour duration
+      864000n   // 10 day duration
     ),
   });
 

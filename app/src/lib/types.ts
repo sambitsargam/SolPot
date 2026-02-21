@@ -106,11 +106,14 @@ export interface TokenInfo {
   logoURI: string;
 }
 
-/** Arcium encrypted guess payload */
+/** Arcium encrypted guess payload (RescueCipher) */
 export interface EncryptedGuess {
-  ciphertext: Uint8Array;
+  /** RescueCipher ciphertext blocks — each is a [u8; 32] field element */
+  ciphertext: Uint8Array[];
+  /** 16-byte nonce used with RescueCipher */
   nonce: Uint8Array;
-  publicKey: Uint8Array;
+  /** Ephemeral x25519 public key for ECDH with MXE */
+  clientPublicKey: Uint8Array;
 }
 
 /** Real-time update event types */

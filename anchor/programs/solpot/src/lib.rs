@@ -1,7 +1,17 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hash;
+use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
+use anchor_lang::solana_program::program::invoke;
 use anchor_lang::system_program::{transfer, Transfer};
-use mpl_core::instructions::CreateV1CpiBuilder;
+
+/// Metaplex Core program ID (CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d)
+/// Decoded from base58 at compile time using the byte literal.
+pub const MPL_CORE_PROGRAM_ID: Pubkey = Pubkey::new_from_array([
+    0xaf, 0x54, 0xab, 0x10, 0xbd, 0x97, 0xa5, 0x42,
+    0xa0, 0x9e, 0xf7, 0xb3, 0x98, 0x89, 0xdd, 0x0c,
+    0xd3, 0x94, 0xa4, 0xcc, 0xe9, 0xdf, 0xa6, 0xcd,
+    0xc9, 0x7e, 0xbe, 0x2d, 0x23, 0x5b, 0xa7, 0x48,
+]);
 
 declare_id!("22tsqvygTkEoomxNduhqEPYKA3DXfPPzNLXVxv9DAp8A");
 
@@ -409,15 +419,53 @@ pub mod solpot {
         name: String,
         uri: String,
     ) -> Result<()> {
-        // Create a Metaplex Core asset via CPI
-        CreateV1CpiBuilder::new(&ctx.accounts.mpl_core_program.to_account_info())
-            .asset(&ctx.accounts.asset.to_account_info())
-            .payer(&ctx.accounts.payer.to_account_info())
-            .owner(Some(&ctx.accounts.winner.to_account_info()))
-            .system_program(&ctx.accounts.system_program.to_account_info())
-            .name(name)
-            .uri(uri)
-            .invoke()?;
+        // Build Metaplex Core CreateV1 instruction data manually.
+        // Discriminator = hashv(&[b"global:create"])[..8]  (Anchor-style)
+        // For Metaplex Core CreateV1 the first byte is the instruction enum index = 0
+        // followed by CreateV1InstructionArgs borsh-serialized
+        let mut data: Vec<u8> = Vec::new();
+        // Metaplex Core CreateV1 discriminator (instruction index 0)
+        data.push(0u8);
+        // CreateV1Args:
+        //   data_state: CollectionToggle (0 = None)
+        data.push(0u8);
+        //   name: borsh String (u32 LE length + bytes)
+        data.extend_from_slice(&(name.len() as u32).to_le_bytes());
+        data.extend_from_slice(name.as_bytes());
+        //   uri: borsh String
+        data.extend_from_slice(&(uri.len() as u32).to_le_bytes());
+        data.extend_from_slice(uri.as_bytes());
+        //   plugins: Option<Vec<PluginAuthorityPair>> = None
+        data.push(0u8);
+        //   external_plugins: Option<Vec<ExternalPluginAdapterInitInfo>> = None  
+        data.push(0u8);
+
+        let accounts = vec![
+            AccountMeta::new(ctx.accounts.asset.key(), true),         // asset (signer, writable)
+            AccountMeta::new_readonly(ctx.accounts.payer.key(), false), // collection (None → pass payer as placeholder, unused when no collection)
+            AccountMeta::new_readonly(ctx.accounts.payer.key(), false), // authority (optional)
+            AccountMeta::new(ctx.accounts.payer.key(), true),         // payer (signer, writable)
+            AccountMeta::new_readonly(ctx.accounts.winner.key(), false), // owner
+            AccountMeta::new_readonly(ctx.accounts.payer.key(), false), // update_authority
+            AccountMeta::new_readonly(ctx.accounts.system_program.key(), false), // system_program
+        ];
+
+        let ix = Instruction {
+            program_id: MPL_CORE_PROGRAM_ID,
+            accounts,
+            data,
+        };
+
+        invoke(
+            &ix,
+            &[
+                ctx.accounts.asset.to_account_info(),
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.winner.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+                ctx.accounts.mpl_core_program.to_account_info(),
+            ],
+        )?;
 
         ctx.accounts.round.nft_minted = true;
 
@@ -678,8 +726,8 @@ pub struct MintRewardNft<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// CHECK: Metaplex Core program verified by address
-    #[account(address = mpl_core::ID)]
+    /// CHECK: Metaplex Core program verified by address constraint
+    #[account(address = MPL_CORE_PROGRAM_ID)]
     pub mpl_core_program: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,

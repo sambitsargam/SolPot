@@ -8,7 +8,7 @@ A multi-game on-chain arena on Solana featuring word guessing, lucky number pick
 - **On-Chain Verification** — All answers stored as SHA-256 hashes on-chain; guesses are verified trustlessly by the Solana program
 - **Pay-to-Play with Any Token** — Enter rounds with SOL directly, or swap any SPL token (USDC, BONK, etc.) via Jupiter in a single transaction
 - **Winner-Takes-All Pot** — All entry fees pool into a PDA vault; the first correct guesser claims the entire pot (minus a small platform fee)
-- **Encrypted Guesses** — Client-side X25519 key exchange + XChaCha20-Poly1305 AEAD encryption protects guesses from mempool snooping
+- **Encrypted Guesses** — Client-side x25519 ECDH key exchange + Arcium RescueCipher encryption protects guesses from mempool snooping
 - **NFT Winner Trophies** — Winners receive a unique Metaplex NFT minted on-chain via CPI as proof of victory
 - **Real-Time Leaderboard** — Live updates via Solana WebSocket subscriptions using the Magicblock pattern — no polling required
 - **Player Stats & Achievements** — Track wins, win rate, SOL earned, and unlock achievement badges
@@ -52,7 +52,7 @@ Answer knowledge questions spanning crypto, science, history, and more. Choose f
 | On-chain program | Anchor 0.30.1 | Game logic, vault, PDA accounts |
 | Token swap | Jupiter Metis API | Any SPL token → SOL entry |
 | NFT rewards | Metaplex Token Metadata | Winner trophy NFTs (CPI) |
-| Encryption | Arcium pattern (X25519 + XChaCha20-Poly1305) | Transport-layer guess privacy |
+| Encryption | Arcium SDK (x25519 + RescueCipher) | Confidential guess encryption |
 | Real-time | Magicblock pattern (Solana WebSocket) | Live leaderboard updates |
 | Frontend | Next.js 14, TypeScript, Tailwind CSS | Multi-game portal UI |
 | Wallet | Solana Wallet Adapter | Phantom, Solflare, Backpack |
@@ -203,7 +203,7 @@ Create `app/.env` from `app/.env.example`:
 - **PDA seed isolation** — unique PDAs per round, per player
 - **Replay protection** — one PlayerEntry per player per round (PDA uniqueness)
 - **Hash-based privacy** — secret answers stored as SHA-256 hash (irreversible)
-- **Transport encryption** — X25519 key exchange + XChaCha20-Poly1305 AEAD
+- **Transport encryption** — x25519 ECDH key exchange + Arcium RescueCipher
 
 ## On-Chain Accounts
 

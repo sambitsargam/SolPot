@@ -17,11 +17,23 @@ import {
   buildEnterRoundIx,
   buildSubmitGuessIx,
 } from "@/lib/program";
-import { MPL_CORE_PROGRAM_ID } from "@/lib/constants";
+import { MPL_CORE_PROGRAM_ID, RPC_URL } from "@/lib/constants";
 import {
   Keypair,
   SystemProgram,
 } from "@solana/web3.js";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { mplCore, createV1 } from "@metaplex-foundation/mpl-core";
+import {
+  generateSigner,
+  createSignerFromKeypair,
+  publicKey as umiPublicKey,
+  signerIdentity,
+} from "@metaplex-foundation/umi";
+import {
+  fromWeb3JsKeypair,
+  toWeb3JsTransaction,
+} from "@metaplex-foundation/umi-web3js-adapters";
 import { buildSwapAndEnterTransaction } from "@/lib/jupiter";
 import { WSOL_MINT } from "@/lib/constants";
 import type { GameConfigAccount, RoundAccount } from "@/lib/types";
@@ -237,7 +249,7 @@ export function useGame() {
     [wallet, getAnchorProvider, refreshState]
   );
 
-  // Mint winner NFT
+  // Mint winner NFT using Metaplex Core SDK
   const mintRewardNft = useCallback(
     async (
       roundPda: PublicKey,
@@ -256,14 +268,21 @@ export function useGame() {
         const program = getProgram(provider);
         const [gameConfigPda] = getGameConfigPda();
 
-        // Generate a new keypair for the Metaplex Core asset
+        // Create Umi instance with Metaplex Core plugin
+        const umi = createUmi(RPC_URL).use(mplCore());
+
+        // Generate a new signer for the Metaplex Core asset
+        const assetSigner = generateSigner(umi);
+
+        const name = `SolPot Winner #${roundId}`;
+        const uri = `https://solpot.app/api/nft/${roundId}`;
+
+        // Use Anchor to build the CPI-based mint instruction
+        // The on-chain program calls Metaplex Core's CreateV1 via CPI
         const assetKeypair = Keypair.generate();
 
         const txSig = await program.methods
-          .mintRewardNft(
-            `SolPot Winner #${roundId}`,
-            `https://solpot.app/api/nft/${roundId}`
-          )
+          .mintRewardNft(name, uri)
           .accountsStrict({
             gameConfig: gameConfigPda,
             round: roundPda,

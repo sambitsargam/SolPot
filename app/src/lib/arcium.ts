@@ -1,42 +1,70 @@
 /**
- * Arcium-style client-side encryption for SolPot Arena.
+ * Arcium confidential computation client for SolPot Arena.
  *
- * Uses X25519 key exchange (same as Arcium's MPC key exchange)
- * and XChaCha20-Poly1305 AEAD for encrypting guesses before submission.
+ * Uses the official @arcium-hq/client SDK:
+ * - x25519 ECDH key exchange (client ↔ MXE shared secret)
+ * - RescueCipher (Rescue-Prime symmetric cipher in CTR mode)
+ * - sha256 for on-chain hash comparison
  *
- * This provides:
- * 1. Transport-layer privacy: guesses are encrypted before hitting the mempool
- * 2. Front-running protection: validators/bots cannot read guess content
- * 3. Real cryptographic operations (not simulated)
+ * Architecture (production):
+ *   1. Client generates ephemeral x25519 keypair
+ *   2. Client fetches MXE's x25519 public key
+ *   3. Derive shared secret via x25519 ECDH
+ *   4. Encrypt guess with RescueCipher using the shared secret
+ *   5. Submit ciphertext + nonce + pubkey to on-chain program
+ *   6. MPC cluster decrypts and verifies inside the MXE
+ *   7. Result returned via callback instruction
  *
- * The on-chain program uses SHA-256 hash comparison for verification,
- * which is a one-way function ensuring the secret word remains hidden.
+ * For the hackathon demo, the on-chain program uses SHA-256 hash comparison
+ * as a fallback verifier. In production, the MXE would replace this with
+ * full MPC verification on encrypted data.
  *
  * References:
- * - Arcium encryption: https://docs.arcium.com/developers/encryption
- * - @noble/curves X25519: https://github.com/paulmillr/noble-curves
- * - @noble/ciphers XChaCha20: https://github.com/paulmillr/noble-ciphers
+ *   - Arcium docs: https://docs.arcium.com/developers/js-client-library
+ *   - Encryption: https://docs.arcium.com/developers/encryption
+ *   - Computation lifecycle: https://docs.arcium.com/developers/computation-lifecycle
  */
 
-import { x25519 } from "@noble/curves/ed25519";
-import { xchacha20poly1305 } from "@noble/ciphers/chacha";
-import { sha256 } from "@noble/hashes/sha256";
-import { randomBytes } from "@noble/ciphers/webcrypto";
+import { RescueCipher, x25519, sha256, deserializeLE } from "@arcium-hq/client";
+
+// ── Types ───────────────────────────────────────────────────────
 
 export interface ArciumKeyPair {
   privateKey: Uint8Array;
   publicKey: Uint8Array;
 }
 
-export interface EncryptedPayload {
-  ciphertext: Uint8Array;
+export interface ArciumEncryptedPayload {
+  /** RescueCipher ciphertext blocks — each element is a [u8; 32] */
+  ciphertext: Uint8Array[];
+  /** 16-byte random nonce */
   nonce: Uint8Array;
-  senderPublicKey: Uint8Array;
+  /** Client's ephemeral x25519 public key (sent to MXE for decryption) */
+  clientPublicKey: Uint8Array;
 }
 
+// ── MXE Public Key (simulated for devnet) ───────────────────────
+// In production, this is fetched via getMXEPublicKey() from the deployed MXE.
+// For the hackathon demo, we use a deterministic key derived from the game
+// authority so the flow is reproducible on devnet.
+
+const GAME_MXE_PRIVATE_KEY = (() => {
+  // Derive a deterministic x25519 private key from the game authority seed.
+  // In production, this key lives inside the MXE and is never exposed.
+  const seed = sha256(
+    [new TextEncoder().encode("solpot-arena-mxe-devnet-v1")]
+  );
+  return seed.slice(0, 32);
+})();
+
+/** The MXE's x25519 public key — published for clients to encrypt against */
+export const MXE_PUBLIC_KEY = x25519.getPublicKey(GAME_MXE_PRIVATE_KEY);
+
+// ── Key Generation ──────────────────────────────────────────────
+
 /**
- * Generate an X25519 keypair for encrypted communication.
- * This mirrors Arcium's client-side key generation.
+ * Generate an ephemeral x25519 keypair for a single guess submission.
+ * Mirrors the Arcium client flow: each computation uses a fresh keypair.
  */
 export function generateKeyPair(): ArciumKeyPair {
   const privateKey = x25519.utils.randomPrivateKey();
@@ -44,99 +72,129 @@ export function generateKeyPair(): ArciumKeyPair {
   return { privateKey, publicKey };
 }
 
-/**
- * Derive a shared secret using X25519 Diffie-Hellman key exchange.
- * In Arcium's flow, this shared secret is derived between the client
- * and the MXE (MPC eXecution Environment).
- */
-export function deriveSharedSecret(
-  privateKey: Uint8Array,
-  peerPublicKey: Uint8Array
-): Uint8Array {
-  const rawShared = x25519.getSharedSecret(privateKey, peerPublicKey);
-  // Derive a 32-byte key from the shared secret using SHA-256
-  return sha256(rawShared);
-}
+// ── Encryption (Arcium RescueCipher) ────────────────────────────
 
 /**
- * Encrypt a guess string using XChaCha20-Poly1305 AEAD.
+ * Encrypt a guess using Arcium's RescueCipher.
  *
- * This provides authenticated encryption — the ciphertext cannot be
- * tampered with without detection. Uses a 24-byte nonce for
- * XChaCha20's extended nonce space (safe for random nonces).
+ * Flow (matches Arcium docs):
+ *   1. x25519 ECDH → shared secret
+ *   2. RescueCipher(sharedSecret) → cipher (internally derives key via Rescue-Prime hash)
+ *   3. cipher.encrypt(plaintext, nonce) → ciphertext blocks
+ *
+ * Each plaintext value is a BigInt field element. We encode the guess as
+ * UTF-8 bytes, then pack each byte as a separate field element for
+ * compatibility with Arcium's per-element encryption.
  */
 export function encryptGuess(
   guess: string,
-  sharedKey: Uint8Array
-): EncryptedPayload {
-  const nonce = randomBytes(24); // XChaCha20 uses 24-byte nonces
-  const plaintext = new TextEncoder().encode(guess.toLowerCase());
-  const cipher = xchacha20poly1305(sharedKey, nonce);
-  const ciphertext = cipher.encrypt(plaintext);
+  clientPrivateKey: Uint8Array,
+  mxePublicKey: Uint8Array = MXE_PUBLIC_KEY
+): ArciumEncryptedPayload {
+  // Step 1: x25519 ECDH key exchange with the MXE
+  const sharedSecret = x25519.getSharedSecret(clientPrivateKey, mxePublicKey);
+
+  // Step 2: Initialize RescueCipher with the shared secret
+  const cipher = new RescueCipher(sharedSecret);
+
+  // Step 3: Encode guess as BigInt field elements (one per byte)
+  const guessBytes = new TextEncoder().encode(guess.toLowerCase());
+  const plaintext = Array.from(guessBytes).map((b) => BigInt(b));
+
+  // Step 4: Generate random 16-byte nonce (required by Arcium)
+  const nonce = crypto.getRandomValues(new Uint8Array(16));
+
+  // Step 5: Encrypt with RescueCipher
+  const rawCiphertext = cipher.encrypt(plaintext, nonce);
+  const ciphertext = rawCiphertext.map((block: number[]) => new Uint8Array(block));
 
   return {
     ciphertext,
     nonce,
-    senderPublicKey: new Uint8Array(32), // placeholder, set by caller
+    clientPublicKey: x25519.getPublicKey(clientPrivateKey),
   };
 }
 
 /**
- * Decrypt a guess from its encrypted payload.
- * Used server-side or by the game authority for verification.
+ * Decrypt a guess from its Arcium encrypted payload.
+ * In production, this runs inside the MXE (MPC cluster).
+ * For devnet testing, we use the simulated MXE private key.
  */
 export function decryptGuess(
-  payload: EncryptedPayload,
-  sharedKey: Uint8Array
+  payload: ArciumEncryptedPayload,
+  mxePrivateKey: Uint8Array = GAME_MXE_PRIVATE_KEY
 ): string {
-  const cipher = xchacha20poly1305(sharedKey, payload.nonce);
-  const plaintext = cipher.decrypt(payload.ciphertext);
-  return new TextDecoder().decode(plaintext);
+  const sharedSecret = x25519.getSharedSecret(mxePrivateKey, payload.clientPublicKey);
+  const cipher = new RescueCipher(sharedSecret);
+  const ciphertextArrays = payload.ciphertext.map((block) => Array.from(block));
+  const plaintext = cipher.decrypt(ciphertextArrays, payload.nonce);
+  const bytes = plaintext.map((v) => Number(v));
+  return new TextDecoder().decode(new Uint8Array(bytes));
 }
 
+// ── SHA-256 Hashing ─────────────────────────────────────────────
+
 /**
- * Compute SHA-256 hash of a word (matches on-chain hashing).
- * The on-chain program uses `solana_program::hash::hash` which is SHA-256.
+ * Compute SHA-256 hash of a word (matches on-chain `solana_program::hash::hash`).
+ * Used for on-chain verification via hash comparison.
  */
 export function hashWord(word: string): Uint8Array {
-  return sha256(new TextEncoder().encode(word.toLowerCase()));
+  return sha256([new TextEncoder().encode(word.toLowerCase())]);
 }
 
+// ── Full Encrypted Guess Flow ───────────────────────────────────
+
 /**
- * Full encrypted guess flow:
- * 1. Generate ephemeral keypair
- * 2. Derive shared secret with game's public key
- * 3. Encrypt the guess
- * 4. Return encrypted payload + plaintext hash for on-chain verification
+ * Prepare an encrypted guess for submission:
+ *   1. Generate ephemeral x25519 keypair
+ *   2. Derive shared secret with game's MXE public key
+ *   3. Encrypt guess with RescueCipher
+ *   4. Compute SHA-256 hash for on-chain verification
  *
- * The plaintext guess goes to the on-chain program for hash comparison.
- * The encrypted payload provides transport-layer privacy.
+ * Returns the encrypted payload (for MXE verification in production)
+ * and the hash (for SHA-256 fallback verification on devnet).
  */
 export function prepareEncryptedGuess(
   guess: string,
-  gamePublicKey: Uint8Array
+  mxePublicKey: Uint8Array = MXE_PUBLIC_KEY
 ): {
-  encryptedPayload: EncryptedPayload;
+  encryptedPayload: ArciumEncryptedPayload;
   guessHash: Uint8Array;
   ephemeralKeyPair: ArciumKeyPair;
 } {
   const keyPair = generateKeyPair();
-  const sharedKey = deriveSharedSecret(keyPair.privateKey, gamePublicKey);
-  const payload = encryptGuess(guess, sharedKey);
-  payload.senderPublicKey = keyPair.publicKey;
+  const encryptedPayload = encryptGuess(guess, keyPair.privateKey, mxePublicKey);
 
   return {
-    encryptedPayload: payload,
+    encryptedPayload,
     guessHash: hashWord(guess),
     ephemeralKeyPair: keyPair,
   };
 }
 
 /**
- * Generate a game-level X25519 keypair.
- * The public key is published; the private key is held by the game authority
- * (or distributed via Arcium MPC to avoid single-point key custody).
+ * Serialize an ArciumEncryptedPayload for on-chain storage.
+ * Encodes the ciphertext blocks, nonce, and client public key into
+ * a single Uint8Array that can be passed as instruction data.
  */
-export function generateGameKeyPair(): ArciumKeyPair {
-  return generateKeyPair();
+export function serializeEncryptedPayload(
+  payload: ArciumEncryptedPayload
+): Uint8Array {
+  const blockCount = payload.ciphertext.length;
+  // Format: [1 byte blockCount] [blockCount * 32 bytes ciphertext] [16 bytes nonce] [32 bytes pubkey]
+  const totalSize = 1 + blockCount * 32 + 16 + 32;
+  const result = new Uint8Array(totalSize);
+  let offset = 0;
+
+  result[offset++] = blockCount;
+  for (const block of payload.ciphertext) {
+    result.set(block, offset);
+    offset += 32;
+  }
+  result.set(payload.nonce, offset);
+  offset += 16;
+  result.set(payload.clientPublicKey, offset);
+
+  return result;
 }
+

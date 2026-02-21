@@ -99,6 +99,9 @@ export const ROUND_GAME_TYPES: Record<number, GameType> = {
   // Rounds 0-4: default to word-guess
   5: "lucky-number",
   6: "trivia",
+  7: "word-guess",
+  8: "lucky-number",
+  9: "trivia",
 };
 
 /**
@@ -109,6 +112,11 @@ export const TRIVIA_QUESTIONS: Record<number, TriviaQuestion> = {
   6: {
     question: "What is the native token of the Solana blockchain?",
     options: ["Ethereum", "Solana (SOL)", "Bitcoin", "Cardano"],
+    category: "Crypto",
+  },
+  9: {
+    question: "Which NFT standard uses single-account assets on Solana?",
+    options: ["Token Metadata", "Metaplex Core", "Candy Machine", "Token-2022"],
     category: "Crypto",
   },
 };
