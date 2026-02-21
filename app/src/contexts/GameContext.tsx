@@ -51,6 +51,7 @@ interface GameContextValue {
   mintRewardNft: (roundPda: PublicKey, winnerPubkey: PublicKey, roundId: number) => Promise<string>;
   hasEnteredRound: (roundPda: PublicKey) => Promise<boolean>;
   hasGuessedInRound: (roundPda: PublicKey) => Promise<boolean>;
+  checkGuessResult: (roundPda: PublicKey) => Promise<boolean>;
   refreshState: () => Promise<void>;
 }
 
@@ -342,6 +343,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [connection, wallet.publicKey]
   );
 
+  // Check if the current player won after submitting a guess
+  const checkGuessResult = useCallback(
+    async (roundPda: PublicKey): Promise<boolean> => {
+      try {
+        const program = getAnchorProvider()
+          ? getProgram(getAnchorProvider()!)
+          : getReadOnlyProgram(connection);
+        const roundData = await fetchRound(program, roundPda);
+        if (!roundData) return false;
+        return (
+          roundData.hasWinner &&
+          wallet.publicKey !== null &&
+          roundData.winner.equals(wallet.publicKey)
+        );
+      } catch {
+        return false;
+      }
+    },
+    [connection, wallet.publicKey, getAnchorProvider]
+  );
+
   const value = useMemo<GameContextValue>(
     () => ({
       gameConfig,
@@ -355,6 +377,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       mintRewardNft,
       hasEnteredRound,
       hasGuessedInRound,
+      checkGuessResult,
       refreshState,
     }),
     [
@@ -369,6 +392,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       mintRewardNft,
       hasEnteredRound,
       hasGuessedInRound,
+      checkGuessResult,
       refreshState,
     ]
   );

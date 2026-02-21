@@ -14,13 +14,15 @@ export default function LuckyNumberGame({
   joined: joinedProp,
   onGuessSubmitted,
 }: LuckyNumberGameProps) {
-  const { submitGuess, hasEnteredRound, hasGuessedInRound, txPending } = useGame();
+  const { submitGuess, hasEnteredRound, hasGuessedInRound, checkGuessResult, txPending } = useGame();
   const [selected, setSelected] = useState<number | null>(null);
   const [joinedLocal, setJoinedLocal] = useState(false);
   const [checkingEntry, setCheckingEntry] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [alreadyGuessed, setAlreadyGuessed] = useState(false);
   const [submittedNumber, setSubmittedNumber] = useState<number | null>(null);
+  const [showWinModal, setShowWinModal] = useState(false);
+  const [showLoseModal, setShowLoseModal] = useState(false);
   const [result, setResult] = useState<{
     type: "success" | "error";
     message: string;
@@ -66,14 +68,26 @@ export default function LuckyNumberGame({
       setSubmittedNumber(selected);
       setAlreadyGuessed(true);
 
+      // Check if we won
+      const won = await checkGuessResult(round.publicKey);
+
       if (onGuessSubmitted) {
         await onGuessSubmitted();
       }
 
-      setResult({
-        type: "success",
-        message: `#${selected} submitted! Tx: ${txSig.slice(0, 12)}...`,
-      });
+      if (won) {
+        setShowWinModal(true);
+        setResult({
+          type: "success",
+          message: `🎉 #${selected} is correct! You won the pot! Tx: ${txSig.slice(0, 12)}...`,
+        });
+      } else {
+        setShowLoseModal(true);
+        setResult({
+          type: "success",
+          message: `#${selected} was not the lucky number. Tx: ${txSig.slice(0, 12)}...`,
+        });
+      }
       setSelected(null);
     } catch (err: any) {
       const msg = err.message || "Failed to submit guess";
@@ -239,6 +253,44 @@ export default function LuckyNumberGame({
           }`}
         >
           {result.message}
+        </div>
+      )}
+
+      {/* Win Modal */}
+      {showWinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-bg-card border border-accent-green/30 rounded-2xl p-8 max-w-sm mx-4 text-center shadow-2xl shadow-accent-green/10 animate-in fade-in zoom-in duration-300">
+            <div className="text-6xl mb-4">🎉</div>
+            <h3 className="text-xl font-bold text-accent-green mb-2">You Won!</h3>
+            <p className="text-text-secondary text-sm mb-6">
+              Congratulations! #{submittedNumber} was the lucky number. You&apos;ve won the pot!
+            </p>
+            <button
+              onClick={() => setShowWinModal(false)}
+              className="px-6 py-2.5 rounded-xl bg-accent-green/10 border border-accent-green/20 text-accent-green font-medium text-sm hover:bg-accent-green/20 transition-all"
+            >
+              Awesome!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lose Modal */}
+      {showLoseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-bg-card border border-accent-amber/30 rounded-2xl p-8 max-w-sm mx-4 text-center shadow-2xl shadow-accent-amber/10 animate-in fade-in zoom-in duration-300">
+            <div className="text-6xl mb-4">😔</div>
+            <h3 className="text-xl font-bold text-accent-amber mb-2">Not This Time!</h3>
+            <p className="text-text-secondary text-sm mb-6">
+              #{submittedNumber} wasn&apos;t the lucky number. Better luck next time!
+            </p>
+            <button
+              onClick={() => setShowLoseModal(false)}
+              className="px-6 py-2.5 rounded-xl bg-accent-amber/10 border border-accent-amber/20 text-accent-amber font-medium text-sm hover:bg-accent-amber/20 transition-all"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       )}
     </div>

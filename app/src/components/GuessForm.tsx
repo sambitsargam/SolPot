@@ -11,10 +11,14 @@ interface GuessFormProps {
 }
 
 export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted }: GuessFormProps) {
-  const { submitGuess, hasEnteredRound, txPending } = useGame();
+  const { submitGuess, hasEnteredRound, hasGuessedInRound, checkGuessResult, txPending } = useGame();
   const [guess, setGuess] = useState("");
   const [joinedLocal, setJoinedLocal] = useState(false);
   const [checkingEntry, setCheckingEntry] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [alreadyGuessed, setAlreadyGuessed] = useState(false);
+  const [showWinModal, setShowWinModal] = useState(false);
+  const [showLoseModal, setShowLoseModal] = useState(false);
 
   const joined = joinedProp ?? joinedLocal;
   const [result, setResult] = useState<{
@@ -23,45 +27,44 @@ export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted 
   } | null>(null);
   const [encryptionInfo, setEncryptionInfo] = useState<string | null>(null);
 
-  // Check if user has entered this round
+  // Check if user has entered this round and already guessed
   useEffect(() => {
     let cancelled = false;
     setCheckingEntry(true);
-    hasEnteredRound(round.publicKey).then((entered) => {
+    Promise.all([
+      hasEnteredRound(round.publicKey),
+      hasGuessedInRound(round.publicKey),
+    ]).then(([entered, guessed]) => {
       if (!cancelled) {
         setJoinedLocal(entered);
+        setAlreadyGuessed(guessed);
         setCheckingEntry(false);
       }
     });
     return () => { cancelled = true; };
-  }, [round.publicKey, hasEnteredRound]);
+  }, [round.publicKey, hasEnteredRound, hasGuessedInRound]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!guess.trim()) return;
+    if (!guess.trim() || alreadyGuessed) return;
 
+    setSubmitting(true);
     setResult(null);
     setEncryptionInfo(null);
 
     try {
       // Step 1: Encrypt the guess using Arcium's RescueCipher + x25519 ECDH
-      // This follows the Arcium computation lifecycle:
-      //   - Generate ephemeral x25519 keypair
-      //   - ECDH key exchange with the MXE public key → shared secret
-      //   - RescueCipher.encrypt(plaintext, nonce) using the shared secret
       const { encryptedPayload, guessHash, ephemeralKeyPair } = prepareEncryptedGuess(
         guess,
         MXE_PUBLIC_KEY
       );
 
-      // Serialize the encrypted payload for logging / future on-chain storage
       const serialized = serializeEncryptedPayload(encryptedPayload);
 
       setEncryptionInfo(
         `Arcium RescueCipher: ${encryptedPayload.ciphertext.length} block(s), ${serialized.length} bytes total`
       );
 
-      // Log encrypted payload for verification (visible in DevTools)
       console.log("[Arcium] Encrypted guess payload:", {
         ciphertextBlocks: encryptedPayload.ciphertext.length,
         nonce: Buffer.from(encryptedPayload.nonce).toString("hex"),
@@ -70,20 +73,30 @@ export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted 
       });
 
       // Step 2: Submit the plaintext guess to the on-chain program for SHA-256 verification
-      // In production with a full MXE deployment, the encrypted payload would be submitted
-      // instead, and the MPC cluster would decrypt + verify inside the MXE via callback.
-      // See: https://docs.arcium.com/developers/computation-lifecycle
       const txSig = await submitGuess(round.publicKey, guess.trim());
 
-      // Refresh game state so UI updates if we won
+      setAlreadyGuessed(true);
+
+      // Check if we won
+      const won = await checkGuessResult(round.publicKey);
+
       if (onGuessSubmitted) {
         await onGuessSubmitted();
       }
 
-      setResult({
-        type: "success",
-        message: `Guess submitted! Tx: ${txSig.slice(0, 12)}...`,
-      });
+      if (won) {
+        setShowWinModal(true);
+        setResult({
+          type: "success",
+          message: `🎉 Correct! You won the pot! Tx: ${txSig.slice(0, 12)}...`,
+        });
+      } else {
+        setShowLoseModal(true);
+        setResult({
+          type: "incorrect",
+          message: `Wrong guess. Better luck next time! Tx: ${txSig.slice(0, 12)}...`,
+        });
+      }
       setGuess("");
     } catch (err: any) {
       const msg = err.message || "Failed to submit guess";
@@ -97,12 +110,17 @@ export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted 
           type: "error",
           message: "This round has expired.",
         });
+      } else if (msg.includes("AlreadyGuessed") || msg.includes("already in use")) {
+        setAlreadyGuessed(true);
+        setResult({ type: "error", message: "You have already submitted a guess for this round." });
       } else {
         setResult({
           type: "error",
           message: msg,
         });
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -145,6 +163,16 @@ export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted 
         Submit Encrypted Guess
       </h4>
 
+      {/* Already guessed banner */}
+      {alreadyGuessed && (
+        <div className="mb-4 p-3 rounded-xl bg-accent-amber/10 border border-accent-amber/20 text-accent-amber text-sm flex items-center gap-2">
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          You&apos;ve already submitted your guess. One guess per round!
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <label className="text-[11px] uppercase tracking-wider text-text-dim mb-1.5 block">
@@ -156,7 +184,7 @@ export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted 
             onChange={(e) => setGuess(e.target.value)}
             placeholder="Enter your guess..."
             className="w-full bg-bg-elevated border border-border rounded-xl px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-dim focus:outline-none focus:border-accent-purple/50 focus:ring-1 focus:ring-accent-purple/20 transition-all"
-            disabled={txPending}
+            disabled={txPending || submitting || alreadyGuessed}
           />
         </div>
 
@@ -178,10 +206,14 @@ export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted 
 
         <button
           type="submit"
-          disabled={txPending || !guess.trim()}
+          disabled={txPending || submitting || !guess.trim() || alreadyGuessed}
           className="w-full py-3 rounded-xl font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-accent-green/10 border border-accent-green/20 text-accent-green hover:bg-accent-green/20 hover:border-accent-green/30"
         >
-          {txPending ? "Submitting..." : "Submit Guess"}
+          {alreadyGuessed
+            ? "Guess Already Submitted"
+            : submitting
+            ? "Submitting..."
+            : "Submit Guess"}
         </button>
       </form>
 
@@ -204,6 +236,44 @@ export default function GuessForm({ round, joined: joinedProp, onGuessSubmitted 
           }`}
         >
           {result.message}
+        </div>
+      )}
+
+      {/* Win Modal */}
+      {showWinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-bg-card border border-accent-green/30 rounded-2xl p-8 max-w-sm mx-4 text-center shadow-2xl shadow-accent-green/10 animate-in fade-in zoom-in duration-300">
+            <div className="text-6xl mb-4">🎉</div>
+            <h3 className="text-xl font-bold text-accent-green mb-2">You Won!</h3>
+            <p className="text-text-secondary text-sm mb-6">
+              Congratulations! Your guess was correct. You&apos;ve won the pot!
+            </p>
+            <button
+              onClick={() => setShowWinModal(false)}
+              className="px-6 py-2.5 rounded-xl bg-accent-green/10 border border-accent-green/20 text-accent-green font-medium text-sm hover:bg-accent-green/20 transition-all"
+            >
+              Awesome!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lose Modal */}
+      {showLoseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-bg-card border border-accent-amber/30 rounded-2xl p-8 max-w-sm mx-4 text-center shadow-2xl shadow-accent-amber/10 animate-in fade-in zoom-in duration-300">
+            <div className="text-6xl mb-4">😔</div>
+            <h3 className="text-xl font-bold text-accent-amber mb-2">Wrong Guess!</h3>
+            <p className="text-text-secondary text-sm mb-6">
+              That wasn&apos;t the right answer. Better luck next time!
+            </p>
+            <button
+              onClick={() => setShowLoseModal(false)}
+              className="px-6 py-2.5 rounded-xl bg-accent-amber/10 border border-accent-amber/20 text-accent-amber font-medium text-sm hover:bg-accent-amber/20 transition-all"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       )}
     </div>
