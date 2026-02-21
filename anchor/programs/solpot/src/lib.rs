@@ -53,6 +53,8 @@ pub enum SolPotError {
     EntryFeeMismatch,
     #[msg("NFT already minted for this round")]
     NftAlreadyMinted,
+    #[msg("Player has already submitted a guess for this round")]
+    AlreadyGuessed,
 }
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -100,12 +102,13 @@ pub struct PlayerEntry {
     pub player: Pubkey,
     pub round: Pubkey,
     pub entered_at: i64,
+    pub has_guessed: bool,
     pub bump: u8,
 }
 
 impl PlayerEntry {
     pub const SEED: &'static [u8] = b"player_entry";
-    pub const SIZE: usize = 8 + 32 + 32 + 8 + 1;
+    pub const SIZE: usize = 8 + 32 + 32 + 8 + 1 + 1;
 }
 
 #[account]
@@ -292,6 +295,7 @@ pub mod solpot {
         player_entry.player = ctx.accounts.player.key();
         player_entry.round = ctx.accounts.round.key();
         player_entry.entered_at = clock.unix_timestamp;
+        player_entry.has_guessed = false;
         player_entry.bump = ctx.bumps.player_entry;
 
         emit!(PlayerEntered {
@@ -305,6 +309,9 @@ pub mod solpot {
     }
 
     pub fn submit_guess(ctx: Context<SubmitGuess>, guess: String) -> Result<()> {
+        let player_entry = &mut ctx.accounts.player_entry;
+        require!(!player_entry.has_guessed, SolPotError::AlreadyGuessed);
+
         let round = &mut ctx.accounts.round;
 
         require!(round.is_active, SolPotError::RoundNotActive);
@@ -319,6 +326,9 @@ pub mod solpot {
         let normalized = guess.to_lowercase();
         let guess_hash = hash(normalized.as_bytes());
         let is_correct = guess_hash.to_bytes() == round.word_hash;
+
+        // Mark that this player has used their one guess
+        player_entry.has_guessed = true;
 
         if is_correct {
             round.winner = ctx.accounts.player.key();
@@ -634,6 +644,7 @@ pub struct SubmitGuess<'info> {
     pub round: Account<'info, Round>,
 
     #[account(
+        mut,
         seeds = [
             PlayerEntry::SEED,
             round.key().as_ref(),
