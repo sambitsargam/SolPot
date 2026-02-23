@@ -1,6 +1,6 @@
 # SolPot Arena
 
-A multi-game on-chain arena on Solana featuring word guessing, lucky number picks, trivia challenges, and coin flip duels — with Jupiter swap entry, Arcium-style encrypted guesses, MagicBlock VRF randomness, Metaplex NFT rewards, Magicblock-pattern real-time updates, and dark/light mode.
+A multi-game on-chain arena on Solana featuring word guessing, lucky number picks, trivia challenges, and coin flip duels — with Jupiter swap entry, Arcium-style encrypted guesses, MagicBlock VRF randomness, Metaplex NFT rewards, Magicblock-pattern real-time updates.
 
 ## Features
 
@@ -12,12 +12,11 @@ A multi-game on-chain arena on Solana featuring word guessing, lucky number pick
 - **NFT Winner Trophies** — Winners receive a unique Metaplex NFT minted on-chain via CPI as proof of victory
 - **Real-Time Leaderboard** — Live updates via Solana WebSocket subscriptions using the Magicblock pattern — no polling required
 - **Player Stats & Achievements** — Track wins, win rate, SOL earned, and unlock achievement badges
-- **Dark / Light Mode** — Toggle between dark and light themes, persisted via localStorage
 - **Claim & Mint UI** — Winners can claim their prize and mint their NFT directly from the frontend with one-click buttons
 - **Live Countdown Timers** — Real-time countdowns for each round with days/hours/minutes/seconds display
 - **Multi-Wallet Support** — Works with Phantom, Solflare, Backpack, and other Solana wallets via Wallet Adapter
 - **Standalone Jupiter Swap** — Devnet/Mainnet toggle swap panel independent of the game
-- **Fully Permissionless** — Pot distribution and NFT minting are permissionless instructions — anyone can trigger them once a winner is determined
+- **Fully Permissionless** — Pot distribution and NFT minting are permissionless instructions — winner can trigger them once a winner is determined
 - **Devnet Ready** — Deployed and playable on Solana devnet with automated round creation scripts
 
 ## Game Modes

@@ -126,6 +126,15 @@ export const ROUND_GAME_TYPES: Record<number, GameType> = {
   12: "lucky-number",
   13: "coin-flip",
   14: "coin-flip",
+  15: "coin-flip",
+  16: "coin-flip",
+  17: "coin-flip",
+  18: "word-guess",
+  19: "word-guess",
+  20: "lucky-number",
+  21: "lucky-number",
+  22: "trivia",
+  23: "trivia",
 };
 
 /**
@@ -141,6 +150,16 @@ export const TRIVIA_QUESTIONS: Record<number, TriviaQuestion> = {
   9: {
     question: "Which NFT standard uses single-account assets on Solana?",
     options: ["Token Metadata", "Metaplex Core", "Candy Machine", "Token-2022"],
+    category: "Crypto",
+  },
+  22: {
+    question: "Which NFT standard uses single-account assets on Solana?",
+    options: ["Token Metadata","Metaplex Core","Candy Machine","Token-2022"],
+    category: "Crypto",
+  },
+  23: {
+    question: "Which NFT standard uses single-account assets on Solana?",
+    options: ["Token Metadata","Metaplex Core","Candy Machine","Token-2022"],
     category: "Crypto",
   },
 };
