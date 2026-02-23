@@ -289,7 +289,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const assetKeypair = Keypair.generate();
 
         const name = `SolPot Winner #${roundId}`;
-        const uri = `https://solpot-arena.vercel.app/api/nft/${roundId}`;
+        const uri = `https://solpot-app.vercel.app/api/nft/${roundId}`;
 
         const txSig = await program.methods
           .mintRewardNft(name, uri)
