@@ -11,7 +11,7 @@ interface PortalHubProps {
   userWins?: number;
 }
 
-const gameOrder: GameType[] = ["word-guess", "lucky-number", "trivia"];
+const gameOrder: GameType[] = ["word-guess", "lucky-number", "trivia", "coin-flip"];
 
 export default function PortalHub({
   rounds,
@@ -51,7 +51,7 @@ export default function PortalHub({
                 </span>
               </h1>
               <p className="text-text-secondary text-sm sm:text-base max-w-lg leading-relaxed">
-                Three on-chain games powered by a single Anchor smart contract.
+                Four on-chain games powered by Anchor + MagicBlock VRF.
                 Every guess is encrypted, every win earns an NFT.
               </p>
             </div>
@@ -90,7 +90,7 @@ export default function PortalHub({
       </div>
 
       {/* ── Game Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {gameOrder.map((key) => {
           const game = GAME_TYPES[key];
           const activeCount = counts[key];

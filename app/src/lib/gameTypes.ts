@@ -6,7 +6,7 @@
  * The game type only changes the frontend UI and input method.
  */
 
-export type GameType = "word-guess" | "lucky-number" | "trivia";
+export type GameType = "word-guess" | "lucky-number" | "trivia" | "coin-flip";
 
 export interface GameTypeConfig {
   id: GameType;
@@ -80,6 +80,25 @@ export const GAME_TYPES: Record<GameType, GameTypeConfig> = {
       "First correct answer wins the pot!",
     ],
   },
+  "coin-flip": {
+    id: "coin-flip",
+    name: "Coin Flip",
+    tagline: "Flip & Win",
+    description:
+      "2-player head-to-head coin flip powered by MagicBlock VRF. Both players enter, the coin flips with verifiable randomness, winner takes all.",
+    emoji: "🪙",
+    color: "text-accent-green",
+    colorLight: "text-accent-teal",
+    bg: "bg-accent-green/10",
+    border: "border-accent-green/20",
+    gradient: "from-accent-green to-accent-teal",
+    howToPlay: [
+      "Pay the entry fee — only 2 players per pot",
+      "Player 1 is Heads, Player 2 is Tails",
+      "MagicBlock VRF flips the coin with verifiable randomness",
+      "Winner takes the entire pot + earns an NFT trophy",
+    ],
+  },
 };
 
 /** Trivia question data — stored client-side, answer verified on-chain via hash */
@@ -105,6 +124,8 @@ export const ROUND_GAME_TYPES: Record<number, GameType> = {
   10: "lucky-number",
   11: "lucky-number",
   12: "lucky-number",
+  13: "coin-flip",
+  14: "coin-flip",
 };
 
 /**
@@ -143,6 +164,7 @@ export function countRoundsByGameType(
     "word-guess": 0,
     "lucky-number": 0,
     trivia: 0,
+    "coin-flip": 0,
   };
 
   for (const r of rounds) {

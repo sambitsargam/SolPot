@@ -8,6 +8,7 @@ import GuessForm from "./GuessForm";
 import JupiterSwap from "./JupiterSwap";
 import LuckyNumberGame from "./LuckyNumberGame";
 import TriviaGame from "./TriviaGame";
+import CoinFlipGame from "./CoinFlipGame";
 import { GAME_TYPES, getRoundGameType, type GameType } from "@/lib/gameTypes";
 
 /* ─── Tabs ──────────────────────────────────────────────────────── */
@@ -73,6 +74,14 @@ function ActiveRound({
       case "trivia":
         return (
           <TriviaGame
+            round={round}
+            joined={joined}
+            onGuessSubmitted={refreshState}
+          />
+        );
+      case "coin-flip":
+        return (
+          <CoinFlipGame
             round={round}
             joined={joined}
             onGuessSubmitted={refreshState}
